@@ -1,4 +1,4 @@
-package get_random
+package randompage
 
 import (
 	"math/rand"

@@ -9,7 +9,8 @@ class Stack extends cdk.Stack {
     super(scope, id);
 
     const apiHandler = new Function(this, "RandomNotionFunction", { 
-      entry: "..",
+      entry: "../go/cmd/lambda",
+      moduleDir: "../go/go.mod",
       timeout: Duration.seconds(30),
     });
     const api = new apigw.HttpApi(this, "RandomNotionAPI");
