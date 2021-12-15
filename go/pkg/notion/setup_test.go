@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-
-	"github.com/jeffrosenberg/random-notion/configs"
 )
 
 const mockDatabaseId = "99999999abcdefgh1234000000000000"
 const mockApiToken = "secret_token"
 const mockApiVersion = "2021-08-16"
 
-func mockNotionServer(mockData string, status int) (*httptest.Server, *configs.NotionConfig) {
+func mockNotionServer(mockData string, status int) (*httptest.Server, *ApiConfig) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Validate Notion headers
 		if validateNotionHeader(w, r) {
@@ -21,16 +19,16 @@ func mockNotionServer(mockData string, status int) (*httptest.Server, *configs.N
 		}
 	}))
 
-	config := &configs.NotionConfig{
-		ApiUrl:      server.URL,
+	api := &ApiConfig{
+		Url:         server.URL,
 		DatabaseId:  mockDatabaseId,
 		SecretToken: mockApiToken,
 	}
 
-	return server, config
+	return server, api
 }
 
-func mockNotionServerWithPaging(mockData []string, status int) (*httptest.Server, *configs.NotionConfig) {
+func mockNotionServerWithPaging(mockData []string, status int) (*httptest.Server, *ApiConfig) {
 	i := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Validate Notion headers
@@ -41,13 +39,13 @@ func mockNotionServerWithPaging(mockData []string, status int) (*httptest.Server
 		}
 	}))
 
-	config := &configs.NotionConfig{
-		ApiUrl:      server.URL,
+	api := &ApiConfig{
+		Url:         server.URL,
 		DatabaseId:  mockDatabaseId,
 		SecretToken: mockApiToken,
 	}
 
-	return server, config
+	return server, api
 }
 
 func validateNotionHeader(w http.ResponseWriter, r *http.Request) bool {

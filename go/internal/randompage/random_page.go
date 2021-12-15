@@ -4,12 +4,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/jeffrosenberg/random-notion/configs"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 )
 
-func GetRandomPage(config *configs.NotionConfig) (*notion.Page, error) {
-	pages, err := notion.GetPages(config)
+func GetRandomPage(getter notion.PageGetter) (*notion.Page, error) {
+	pages, err := getter.GetPages()
 	if err != nil {
 		return nil, err
 	}

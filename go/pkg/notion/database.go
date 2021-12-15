@@ -6,8 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
-	"github.com/jeffrosenberg/random-notion/configs"
 )
 
 type Database struct {
@@ -17,8 +15,8 @@ type Database struct {
 	Url            string `json:"url"`
 }
 
-func GetDatabase(config *configs.NotionConfig) (*Database, error) {
-	url, err := url.Parse(fmt.Sprintf("%s/databases/%s", config.ApiUrl, config.DatabaseId))
+func (api *ApiConfig) GetDatabase() (*Database, error) {
+	url, err := url.Parse(fmt.Sprintf("%s/databases/%s", api.Url, api.DatabaseId))
 	if err != nil {
 		return nil, fmt.Errorf("Unable to parse URL: %w", err)
 	}
@@ -26,7 +24,7 @@ func GetDatabase(config *configs.NotionConfig) (*Database, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url.String(), nil)
 	req.Header.Set("Notion-Version", "2021-08-16")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.SecretToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", api.SecretToken))
 
 	res, err := client.Do(req)
 	if err != nil {

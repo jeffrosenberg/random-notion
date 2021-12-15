@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
-	"github.com/jeffrosenberg/random-notion/configs"
 )
 
 type Page struct { // TODO: pull in more properties?
@@ -18,25 +16,29 @@ type Page struct { // TODO: pull in more properties?
 	Url            string `json:"url"`
 }
 
-type PageRequest struct {
+type PageGetter interface {
+	GetPages() (*[]Page, error)
+}
+
+type pageRequest struct {
 	PageSize    uint8  `json:"page_size"`
 	StartCursor string `json:"start_cursor,omitempty"`
 }
 
-type PageResponse struct {
+type pageResponse struct {
 	Object  string `json:"object"`
 	Results []Page `json:"results"`
 	Next    string `json:"next_cursor"`
 	HasMore bool   `json:"has_more"`
 }
 
-func GetPages(config *configs.NotionConfig) (*[]Page, error) {
+func (api *ApiConfig) GetPages() (*[]Page, error) {
 	pages := []Page{}
 	hasMore := true
 	cursor := ""
 
 	for hasMore == true {
-		response, err := queryPages(config, cursor)
+		response, err := api.queryPages(cursor)
 		if err != nil {
 			return nil, err // TODO: More robust error handling
 		}
@@ -48,48 +50,39 @@ func GetPages(config *configs.NotionConfig) (*[]Page, error) {
 	return &pages, nil
 }
 
-func queryPages(config *configs.NotionConfig, cursor string) (PageResponse, error) {
-	url, err := url.Parse(fmt.Sprintf("%s/databases/%s/query", config.ApiUrl, config.DatabaseId))
+func (api *ApiConfig) queryPages(cursor string) (pageResponse, error) {
+	url, err := url.Parse(fmt.Sprintf("%s/databases/%s/query", api.Url, api.DatabaseId))
 	if err != nil {
-		return emptyReponse(), fmt.Errorf("Unable to parse URL: %w", err)
+		return pageResponse{}, fmt.Errorf("Unable to parse URL: %w", err)
 	}
 
 	client := &http.Client{}
-	postBody := PageRequest{
-		PageSize:    config.PageSize,
+	postBody := pageRequest{
+		PageSize:    api.PageSize,
 		StartCursor: cursor,
 	}
 	jsonValue, _ := json.Marshal(postBody)
 	req, err := http.NewRequest("POST", url.String(), bytes.NewBuffer(jsonValue))
 	req.Header.Set("Notion-Version", "2021-08-16")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.SecretToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", api.SecretToken))
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := client.Do(req)
 	if err != nil {
-		return emptyReponse(), fmt.Errorf("Unable to retrieve response: %w", err)
+		return pageResponse{}, fmt.Errorf("Unable to retrieve response: %w", err)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return emptyReponse(), fmt.Errorf("Received invalid status: %s", res.Status)
+		return pageResponse{}, fmt.Errorf("Received invalid status: %s", res.Status)
 	}
 
 	body, err := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	if err != nil {
-		return emptyReponse(), fmt.Errorf("Enable to read response body: %w", err)
+		return pageResponse{}, fmt.Errorf("Enable to read response body: %w", err)
 	}
 
-	var pageResponse PageResponse
+	var pageResponse pageResponse
 	json.Unmarshal(body, &pageResponse)
 	return pageResponse, nil
-}
-
-func emptyReponse() PageResponse {
-	return PageResponse{
-		Object:  "",
-		Results: nil,
-		Next:    "",
-		HasMore: false,
-	}
 }

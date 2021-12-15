@@ -69,10 +69,10 @@ func TestRetrievePages(t *testing.T) {
 		},
 	}
 
-	ts, config := mockNotionServer(mockData, http.StatusOK)
+	ts, api := mockNotionServer(mockData, http.StatusOK)
 	defer ts.Close()
 
-	pages, err := GetPages(config)
+	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
 		assert.EqualValues(t, expected, *pages)
@@ -89,10 +89,10 @@ func TestRetrievePagesEmpty(t *testing.T) {
 
 	expected := []Page{}
 
-	ts, config := mockNotionServer(mockData, http.StatusOK)
+	ts, api := mockNotionServer(mockData, http.StatusOK)
 	defer ts.Close()
 
-	pages, err := GetPages(config)
+	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
 		assert.EqualValues(t, expected, *pages)
@@ -107,10 +107,10 @@ func TestRetrievePagesError(t *testing.T) {
     "message": "Badly mocked data that should probably be refactored"
 	}`
 
-	ts, config := mockNotionServer(mockData, http.StatusInternalServerError)
+	ts, api := mockNotionServer(mockData, http.StatusInternalServerError)
 	defer ts.Close()
 
-	pages, err := GetPages(config)
+	pages, err := api.GetPages()
 	assert.Error(t, err)
 	assert.Nil(t, pages)
 }
@@ -123,10 +123,10 @@ func TestRetrievePagesDatabaseNotFound(t *testing.T) {
 		"message": "Could not find database with ID: 99999999-abcd-efgh-1234-000000000000."
 	}`
 
-	ts, config := mockNotionServer(mockData, http.StatusNotFound)
+	ts, api := mockNotionServer(mockData, http.StatusNotFound)
 	defer ts.Close()
 
-	pages, err := GetPages(config)
+	pages, err := api.GetPages()
 	assert.Error(t, err) // TODO: More specific error assertions
 	assert.Nil(t, pages)
 }
@@ -226,10 +226,10 @@ func TestRetrievePageCollection(t *testing.T) {
 		},
 	}
 
-	ts, config := mockNotionServerWithPaging([]string{mockData1, mockData2}, http.StatusOK)
+	ts, api := mockNotionServerWithPaging([]string{mockData1, mockData2}, http.StatusOK)
 	defer ts.Close()
 
-	pages, err := GetPages(config)
+	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
 		assert.EqualValues(t, expected, *pages)

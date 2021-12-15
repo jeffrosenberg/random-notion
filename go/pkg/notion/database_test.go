@@ -79,10 +79,10 @@ func TestRetrieveDatabase(t *testing.T) {
 		Url:            "https://www.notion.so/45d3242e5c6d4a3bb99e4aa4db83f015",
 	}
 
-	ts, config := mockNotionServer(mockData, http.StatusOK)
+	ts, api := mockNotionServer(mockData, http.StatusOK)
 	defer ts.Close()
 
-	db, err := GetDatabase(config)
+	db, err := api.GetDatabase()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, db)
 		assert.EqualValues(t, expected, *db)
@@ -140,10 +140,10 @@ func TestRetrieveDatabaseWithMissingUrl(t *testing.T) {
 		Url:            "",
 	}
 
-	ts, config := mockNotionServer(mockData, http.StatusOK)
+	ts, api := mockNotionServer(mockData, http.StatusOK)
 	defer ts.Close()
 
-	db, err := GetDatabase(config)
+	db, err := api.GetDatabase()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, db)
 		assert.EqualValues(t, expected, *db)
@@ -158,10 +158,10 @@ func TestRetrieveDatabaseError(t *testing.T) {
     "message": "Badly mocked data that should probably be refactored"
 	}`
 
-	ts, config := mockNotionServer(mockData, http.StatusInternalServerError)
+	ts, api := mockNotionServer(mockData, http.StatusInternalServerError)
 	defer ts.Close()
 
-	db, err := GetDatabase(config)
+	db, err := api.GetDatabase()
 	assert.Error(t, err)
 	assert.Nil(t, db)
 }
@@ -174,10 +174,10 @@ func TestRetrieveDatabaseNotFound(t *testing.T) {
 		"message": "Could not find database with ID: 99999999-abcd-efgh-1234-000000000000."
 	}`
 
-	ts, config := mockNotionServer(mockData, http.StatusNotFound)
+	ts, api := mockNotionServer(mockData, http.StatusNotFound)
 	defer ts.Close()
 
-	db, err := GetDatabase(config)
+	db, err := api.GetDatabase()
 	assert.Error(t, err) // TODO: More specific error assertions
 	assert.Nil(t, db)
 }
