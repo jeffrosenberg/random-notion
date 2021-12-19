@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+
+	"github.com/rs/zerolog/log"
 )
 
 const mockDatabaseId = "99999999abcdefgh1234000000000000"
@@ -23,6 +25,7 @@ func mockNotionServer(mockData string, status int) (*httptest.Server, *ApiConfig
 		Url:         server.URL,
 		DatabaseId:  mockDatabaseId,
 		SecretToken: mockApiToken,
+		Logger:      &log.Logger,
 	}
 
 	return server, api
@@ -43,6 +46,7 @@ func mockNotionServerWithPaging(mockData []string, status int) (*httptest.Server
 		Url:         server.URL,
 		DatabaseId:  mockDatabaseId,
 		SecretToken: mockApiToken,
+		Logger:      &log.Logger,
 	}
 
 	return server, api

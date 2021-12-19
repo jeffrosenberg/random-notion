@@ -8,6 +8,8 @@ import (
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,6 +26,14 @@ func (api *TestApiConfig) GetPages() (*[]notion.Page, error) {
 	return &[]notion.Page{
 		*api.page,
 	}, nil
+}
+
+func (api *TestApiConfig) GetLogger() *zerolog.Logger {
+	return &log.Logger
+}
+
+func (api *TestApiConfig) SetLogger(logger *zerolog.Logger) {
+	return // no action for tests
 }
 
 func TestHandleRequest_Success(t *testing.T) {

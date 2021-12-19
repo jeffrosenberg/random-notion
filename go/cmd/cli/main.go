@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jeffrosenberg/random-notion/configs"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
 	"github.com/jeffrosenberg/random-notion/internal/randompage"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 )
@@ -23,7 +25,9 @@ func main() {
 		DatabaseId:  *databaseId,
 		SecretToken: *secret,
 		PageSize:    uint8(*pageSize),
+		Logger:      &log.Logger,
 	}
+	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 
 	randomPage, err := randompage.GetRandomPage(api)
 	if err != nil {
