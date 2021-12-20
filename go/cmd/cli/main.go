@@ -14,11 +14,21 @@ import (
 
 func main() {
 	// Parse command-line arguments and create a config object
-	url := flag.String("url", configs.API_URI, "Base URL of the Notion API")
-	databaseId := flag.String("databaseId", configs.TEMP_DATABASE_ID, "Notion Databse ID")
-	secret := flag.String("secret", configs.TEMP_TOKEN, "Notion API secret token")
-	pageSize := flag.Uint("pageSize", uint(configs.PAGE_SIZE), "Pages to retrieve per Notion API call")
+	url := flag.String("url", notion.API_URI, "Base URL of the Notion API")
+	databaseId := flag.String("databaseId", "", "Notion Databse ID")
+	secret := flag.String("secret", "", "Notion API secret token")
+	pageSize := flag.Uint("pageSize", uint(notion.DEFAULT_PAGE_SIZE), "Pages to retrieve per Notion API call")
 	flag.Parse()
+
+	if *databaseId == "" {
+		fmt.Fprintln(os.Stderr, "Database ID required")
+		flag.Usage()
+		os.Exit(1)
+	} else if *secret == "" {
+		fmt.Fprintln(os.Stderr, "Notion API secret token required")
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	api := &notion.ApiConfig{
 		Url:         *url,

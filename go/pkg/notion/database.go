@@ -24,6 +24,10 @@ func (api *ApiConfig) GetDatabase() (*Database, error) {
 	}
 
 	client := &http.Client{}
+	api.Logger.Trace().
+		Str("request_verb", "GET").
+		Str("request_url", url.String()).
+		Msg("Prepared Notion API request")
 	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {
 		api.Logger.Err(err).Msg("Unable to create request")

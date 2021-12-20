@@ -71,7 +71,11 @@ func (api *ApiConfig) queryPages(cursor string) (pageResponse, error) {
 		StartCursor: cursor,
 	}
 	jsonValue, _ := json.Marshal(postBody)
-	api.Logger.Trace().RawJSON("request_json", jsonValue).Msg("Prepared Notion API request")
+	api.Logger.Trace().
+		Str("request_verb", "POST").
+		Str("request_url", url.String()).
+		RawJSON("request_json", jsonValue).
+		Msg("Prepared Notion API request")
 	req, err := http.NewRequest("POST", url.String(), bytes.NewBuffer(jsonValue))
 	if err != nil {
 		api.Logger.Err(err).Msg("Unable to create request")
