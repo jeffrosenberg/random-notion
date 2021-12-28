@@ -9,7 +9,7 @@ import (
 	"net/url"
 )
 
-type Page struct { // TODO: pull in more properties?
+type Page struct {
 	Id             string `json:"id"`
 	CreatedTime    string `json:"created_time"`
 	LastEditedTime string `json:"last_edited_time"`
