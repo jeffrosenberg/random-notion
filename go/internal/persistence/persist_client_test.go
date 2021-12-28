@@ -1,4 +1,4 @@
-package persist
+package persistence
 
 import (
 	"testing"
@@ -30,7 +30,7 @@ func (mock MockDynamoDb) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetIte
 }
 
 func (mock MockDynamoDb) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
-	mock.Called()
+	mock.MethodCalled("PutItem", input)
 	return &dynamodb.PutItemOutput{}, nil
 }
 
@@ -67,8 +67,8 @@ func TestGetReturnsNotionPages(t *testing.T) {
 func TestPutPagesCalled(t *testing.T) {
 	// Arrange
 	mockClient := MockDynamoDb{}
-	mockClient.Mock.On("PutItem", mock.Anything).Return(&dynamodb.PutItemOutput{}, nil)
 	data := testDataStruct
+	mockClient.Mock.On("PutItem", mock.Anything) // Assert that PutItem is called
 
 	// Act
 	err := PutPages(mockClient, &data.Pages, &databaseId)

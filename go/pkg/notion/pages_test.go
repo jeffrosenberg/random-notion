@@ -75,7 +75,7 @@ func TestRetrievePages(t *testing.T) {
 	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
-		assert.EqualValues(t, expected, *pages)
+		assert.EqualValues(t, expected, pages)
 	}
 }
 
@@ -95,7 +95,7 @@ func TestRetrievePagesEmpty(t *testing.T) {
 	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
-		assert.EqualValues(t, expected, *pages)
+		assert.EqualValues(t, expected, pages)
 	}
 }
 
@@ -232,6 +232,6 @@ func TestRetrievePageCollection(t *testing.T) {
 	pages, err := api.GetPages()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, pages)
-		assert.EqualValues(t, expected, *pages)
+		assert.EqualValues(t, expected, pages)
 	}
 }

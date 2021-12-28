@@ -17,7 +17,7 @@ type Page struct {
 }
 
 type PageGetter interface {
-	GetPages() (*[]Page, error)
+	GetPages() ([]Page, error)
 	Logger
 }
 
@@ -33,7 +33,7 @@ type pageResponse struct {
 	HasMore bool   `json:"has_more"`
 }
 
-func (api *ApiConfig) GetPages() (*[]Page, error) {
+func (api *ApiConfig) GetPages() ([]Page, error) {
 	api.Logger.Info().Msg("Getting pages")
 	pages := []Page{}
 	hasMore := true
@@ -55,7 +55,7 @@ func (api *ApiConfig) GetPages() (*[]Page, error) {
 			Msg("Processed Notion API response")
 	}
 
-	return &pages, nil
+	return pages, nil
 }
 
 func (api *ApiConfig) queryPages(cursor string) (pageResponse, error) {

@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/jeffrosenberg/random-notion/internal/randompage"
+	"github.com/jeffrosenberg/random-notion/internal/pageselection"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -40,32 +40,34 @@ type AwsSecret struct {
 	DatabaseId string `json:"database_id"`
 }
 
-// Closure for injection of `api`
-func handleRequestForApi(api notion.PageGetter) HandlerFn {
+// Closure for injection of notion.PageGetter interface
+func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelector) HandlerFn {
 	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 		createLogger(ctx, api)
 		api.GetLogger().Info().
 			Str("log_level", api.GetLogger().GetLevel().String()).
 			Msg("Random Notion handler triggered")
 
-		randomPage, err := randompage.GetRandomPage(api)
+		pages, err := api.GetPages()
 		if err != nil {
 			api.GetLogger().Err(err)
 			return events.APIGatewayV2HTTPResponse{
 				StatusCode: 400,
 				Body:       err.Error(),
 			}, err
-		} else {
-			api.GetLogger().Debug().
-				Str("page_id", randomPage.Id).
-				Str("page_url", randomPage.Url).
-				Send()
-			return events.APIGatewayV2HTTPResponse{
-				StatusCode: 200,
-				Body:       fmt.Sprintf("{\"id\":\"%s\", \"url\":\"%s\"}", randomPage.Id, randomPage.Url),
-				Headers:    map[string]string{"Content-Type": "application/json"},
-			}, nil
 		}
+
+		selectedPage := selector.SelectPage(pages)
+
+		api.GetLogger().Debug().
+			Str("page_id", selectedPage.Id).
+			Str("page_url", selectedPage.Url).
+			Send()
+		return events.APIGatewayV2HTTPResponse{
+			StatusCode: 200,
+			Body:       fmt.Sprintf("{\"id\":\"%s\", \"url\":\"%s\"}", selectedPage.Id, selectedPage.Url),
+			Headers:    map[string]string{"Content-Type": "application/json"},
+		}, nil
 	}
 }
 
@@ -160,7 +162,8 @@ func setApiSecrets(api *notion.ApiConfig) {
 
 func main() {
 	api := notion.NewApiConfig()
+	selector := &pageselection.RandomPage{}
 	setApiSecrets(api)
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	lambda.Start(handleRequestForApi(api))
+	lambda.Start(handleRequestForApi(api, selector))
 }

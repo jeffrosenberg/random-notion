@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -60,21 +58,12 @@ func TestHandleRequest_Success(t *testing.T) {
 		},
 	}
 	selector := &TestSelector{}
-	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages") // Assert that PageGetter methods are called
-	api.Mock.On("GetLogger")
+	api.Mock.On("GetPages")        // Assert that PageGetter methods are called
 	selector.Mock.On("SelectPage") // Assert that PageSelector methods are called
-	handler := handleRequestForApi(api, selector)
 
-	result, err := handler(context.Background(), event)
+	result, err := execGetPage(api, selector)
 	require.NoError(t, err)
-
-	expected := events.APIGatewayV2HTTPResponse{
-		StatusCode: 200,
-		Body:       fmt.Sprintf("{\"id\":\"%s\", \"url\":\"%s\"}", api.page.Id, api.page.Url),
-		Headers:    map[string]string{"Content-Type": "application/json"},
-	}
-	assert.EqualValues(t, expected, result)
+	assert.EqualValues(t, api.page.Url, result)
 	api.AssertExpectations(t)
 	selector.AssertExpectations(t)
 }
@@ -82,20 +71,12 @@ func TestHandleRequest_Success(t *testing.T) {
 func TestHandleRequest_Error(t *testing.T) {
 	api := &TestApiConfig{}
 	selector := &TestSelector{}
-	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages") // Assert that PageGetter methods are called
-	api.Mock.On("GetLogger")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
-	handler := handleRequestForApi(api, selector)
 
-	result, err := handler(context.Background(), event)
+	result, err := execGetPage(api, selector)
 	require.Error(t, err)
-
-	expected := events.APIGatewayV2HTTPResponse{
-		StatusCode: 400,
-		Body:       "No pages found",
-	}
-	assert.EqualValues(t, expected, result)
+	assert.EqualValues(t, "", result)
 	api.AssertExpectations(t)
 	selector.AssertExpectations(t)
 }
