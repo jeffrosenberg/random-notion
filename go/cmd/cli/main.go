@@ -18,7 +18,7 @@ const (
 )
 
 func execGetPage(api notion.PageGetter, selector pageselection.PageSelector) (string, error) {
-	pages, err := api.GetPages()
+	pages, err := api.GetPages("")
 	if err != nil {
 		return "", err
 	}

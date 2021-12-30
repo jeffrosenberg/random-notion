@@ -17,7 +17,8 @@ type Page struct {
 }
 
 type PageGetter interface {
-	GetPages() ([]Page, error)
+	GetPages(string) ([]Page, error)
+	GetAllPages() ([]Page, error)
 	Logger
 }
 
@@ -33,11 +34,11 @@ type pageResponse struct {
 	HasMore bool   `json:"has_more"`
 }
 
-func (api *ApiConfig) GetPages() ([]Page, error) {
+// Return pages from the Notion API, starting at an optional cursor string
+func (api *ApiConfig) GetPages(cursor string) ([]Page, error) {
 	api.Logger.Info().Msg("Getting pages")
 	pages := []Page{}
 	hasMore := true
-	cursor := ""
 
 	for hasMore == true {
 		response, err := api.queryPages(cursor)
@@ -56,6 +57,11 @@ func (api *ApiConfig) GetPages() ([]Page, error) {
 	}
 
 	return pages, nil
+}
+
+// Return all pages from the Notion API
+func (api *ApiConfig) GetAllPages() ([]Page, error) {
+	return api.GetPages("")
 }
 
 func (api *ApiConfig) queryPages(cursor string) (pageResponse, error) {

@@ -14,6 +14,7 @@ import (
 )
 
 var databaseId string = "99999999-abcd-efgh-1234-000000000000"
+var nextCursor string = "5331da24-6597-4f2d-a684-fd94a0f3278a"
 
 type MockDynamoDb struct {
 	mock.Mock
@@ -46,6 +47,7 @@ func TestGetNoPagesFoundReturnsDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", result.DatabaseId)
 	assert.Nil(t, result.Pages)
+	assert.Equal(t, "", result.NextCursor)
 }
 
 func TestGetReturnsNotionPages(t *testing.T) {
@@ -62,16 +64,16 @@ func TestGetReturnsNotionPages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, databaseId, result.DatabaseId)
 	assert.Equal(t, expected.Pages, result.Pages)
+	assert.Equal(t, nextCursor, result.NextCursor)
 }
 
 func TestPutPagesCalled(t *testing.T) {
 	// Arrange
 	mockClient := MockDynamoDb{}
-	data := testDataStruct
 	mockClient.Mock.On("PutItem", mock.Anything) // Assert that PutItem is called
 
 	// Act
-	err := PutPages(mockClient, &data.Pages, &databaseId)
+	err := PutPages(mockClient, testDataStruct)
 
 	// Assert
 	require.NoError(t, err)
@@ -100,9 +102,10 @@ var testDataDynamoDbAttribute map[string]*dynamodb.AttributeValue = map[string]*
 			},
 		},
 	},
+	"NextCursor": {S: aws.String(nextCursor)},
 }
 
-var testDataStruct *NotionPages = &NotionPages{
+var testDataStruct *NotionDTO = &NotionDTO{
 	DatabaseId: databaseId,
 	Pages: []notion.Page{
 		{
@@ -118,4 +121,5 @@ var testDataStruct *NotionPages = &NotionPages{
 			Url:            "https://www.notion.so/Chicken-korma-recipe-How-to-make-chicken-korma-Swasthi-s-Recipes-5331da2465974f2da684fd94a0f3278a",
 		},
 	},
+	NextCursor: nextCursor,
 }

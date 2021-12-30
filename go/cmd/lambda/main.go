@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/jeffrosenberg/random-notion/internal/pageselection"
+	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -19,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
 )
 
@@ -30,7 +33,7 @@ const (
 // Inject via CDK configuration
 var (
 	CommitID string
-	LogLevel string // must be convertable to zerolog.Level
+	LogLevel string = "1" // must be convertable to zerolog.Level - Debug = 0, Info = 1, Trace = -1
 )
 
 type HandlerFn func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
@@ -41,23 +44,65 @@ type AwsSecret struct {
 }
 
 // Closure for injection of notion.PageGetter interface
-func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelector) HandlerFn {
+// TODO: Revisit whether there's a more elegant way to get databaseId
+func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelector,
+	db dynamodbiface.DynamoDBAPI, databaseId string) HandlerFn {
 	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 		createLogger(ctx, api)
 		api.GetLogger().Info().
 			Str("log_level", api.GetLogger().GetLevel().String()).
 			Msg("Random Notion handler triggered")
 
-		pages, err := api.GetPages()
-		if err != nil {
-			api.GetLogger().Err(err)
-			return events.APIGatewayV2HTTPResponse{
-				StatusCode: 400,
-				Body:       err.Error(),
-			}, err
+		// 1. Get cached pages from DynamoDb
+		dto, err := persistence.GetPages(db, &databaseId)
+		if dto == nil {
+			if err != nil {
+				api.GetLogger().Err(err).Msg("Unable to read cached data from DynamoDb")
+			}
+			// We could still read from the API, so set dto to a stub and keep going
+			dto = &persistence.NotionDTO{
+				DatabaseId: databaseId,
+				Pages:      []notion.Page{},
+				NextCursor: "",
+			}
 		}
 
-		selectedPage := selector.SelectPage(pages)
+		// 2. Get additional pages from the Notion API
+		apiPages, err := api.GetPages(dto.NextCursor)
+		if err != nil {
+			api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
+			// We could still read from the API, so set apiPages to a stub and keep going
+			apiPages = []notion.Page{}
+		}
+
+		api.GetLogger().Debug().
+			Int("pages_cached", len(dto.Pages)).
+			Int("pages_api", len(apiPages)).
+			Msg("Retrieved pages")
+
+		if len(dto.Pages) == 0 && len(apiPages) == 0 {
+			if err != nil {
+				return events.APIGatewayV2HTTPResponse{
+					StatusCode: 400,
+					Body:       err.Error(),
+				}, err
+			} else {
+				// No error, but no pages available: Return 204 No Content
+				// This is a tough scenario to pick a status code for,
+				// but should also be encountered rarely
+				api.GetLogger().Warn().Msg("No records found")
+				return events.APIGatewayV2HTTPResponse{
+					StatusCode: 204,
+				}, nil
+			}
+		}
+
+		// 3. Dedup and combine both sources of pages
+		pagesAdded := pageselection.UnionPages(dto, apiPages)
+		if pagesAdded {
+			persistence.PutPages(db, dto)
+		}
+		selectedPage := selector.SelectPage(dto.Pages)
 
 		api.GetLogger().Debug().
 			Str("page_id", selectedPage.Id).
@@ -72,6 +117,8 @@ func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelec
 }
 
 func createLogger(ctx context.Context, api notion.PageGetter) {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
 	// Read LogLevel from linker value
 	var level zerolog.Level
 	convertedLevel, err := strconv.ParseInt(LogLevel, 0, 8)
@@ -101,14 +148,8 @@ func createLogger(ctx context.Context, api notion.PageGetter) {
 
 // Code snippet via AWS docs:
 // https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/setting-up.html
-func setApiSecrets(api *notion.ApiConfig) {
+func setApiSecrets(api *notion.ApiConfig, sess *session.Session) {
 	//Create a Secrets Manager client
-	sess, err := session.NewSession()
-	if err != nil {
-		// Handle session creation error
-		fmt.Println(err.Error())
-		return
-	}
 	svc := secretsmanager.New(sess, aws.NewConfig().WithRegion(SecretRegion))
 	input := &secretsmanager.GetSecretValueInput{
 		SecretId:     aws.String(SecretName),
@@ -161,9 +202,12 @@ func setApiSecrets(api *notion.ApiConfig) {
 }
 
 func main() {
+	// Initialize interfaces
 	api := notion.NewApiConfig()
 	selector := &pageselection.RandomPage{}
-	setApiSecrets(api)
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	lambda.Start(handleRequestForApi(api, selector))
+	sess := session.Must(session.NewSession())
+	setApiSecrets(api, sess)
+	db := dynamodb.New(sess)
+
+	lambda.Start(handleRequestForApi(api, selector, db, api.DatabaseId))
 }
