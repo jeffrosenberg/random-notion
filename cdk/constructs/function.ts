@@ -11,10 +11,11 @@ export default class Function extends golambda.GoFunction {
   constructor(
     scope: cdk.Construct,
     id: string,
+    logLevel: number,
     props: golambda.GoFunctionProps
   ) {
     const rev = readGitRevision();
-    const flags = [`-ldflags "-X main.CommitID=${rev} -X main.LogLevel=-1"`]; // Debug = 0, Info = 1, Trace = -1
+    const flags = [`-ldflags "-X main.CommitID=${rev} -X main.LogLevel=${logLevel}"`];
     props = {
       tracing: lambda.Tracing.ACTIVE,
       insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,

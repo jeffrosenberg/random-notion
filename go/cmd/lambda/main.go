@@ -47,14 +47,38 @@ type AwsSecret struct {
 // TODO: Revisit whether there's a more elegant way to get databaseId
 func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelector,
 	db dynamodbiface.DynamoDBAPI, databaseId string) HandlerFn {
-	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (event events.APIGatewayV2HTTPResponse, err error) {
+		var dto *persistence.NotionDTO
+		var apiPages []notion.Page
+
 		createLogger(ctx, api)
-		api.GetLogger().Info().
+		api.GetLogger().Debug().
+			Str("function", "handleRequestForApi").
 			Str("log_level", api.GetLogger().GetLevel().String()).
 			Msg("Random Notion handler triggered")
 
+		// Recover from a panic and return a 500 error
+		defer func() {
+			if r := recover(); r != nil {
+				err := fmt.Errorf("%v", r)
+				api.GetLogger().
+					Err(err).
+					Interface("dto", dto).
+					Interface("api_pages", apiPages).
+					Interface("pagegetter", api).
+					Interface("pageselector", selector).
+					Str("database_id", databaseId).
+					Msg("Recovered from a panic")
+				event = events.APIGatewayV2HTTPResponse{
+					StatusCode: 500,
+					Body:       "Internal server error",
+				}
+			}
+		}()
+
 		// 1. Get cached pages from DynamoDb
-		dto, err := persistence.GetPages(db, &databaseId)
+		api.GetLogger().Debug().Msg("Getting pages from DynamoDb")
+		dto, err = persistence.GetPages(db, &databaseId, api.GetLogger())
 		if dto == nil {
 			if err != nil {
 				api.GetLogger().Err(err).Msg("Unable to read cached data from DynamoDb")
@@ -68,20 +92,24 @@ func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelec
 		}
 
 		// 2. Get additional pages from the Notion API
-		apiPages, err := api.GetPages(dto.NextCursor)
+		api.GetLogger().Debug().
+			Str("function", "handleRequestForApi").
+			Msg("Getting pages from Notion API")
+		apiPages, err = api.GetPages(dto.NextCursor)
 		if err != nil {
 			api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
 			// We could still read from the API, so set apiPages to a stub and keep going
 			apiPages = []notion.Page{}
 		}
 
-		api.GetLogger().Debug().
+		api.GetLogger().Info().
 			Int("pages_cached", len(dto.Pages)).
 			Int("pages_api", len(apiPages)).
 			Msg("Retrieved pages")
 
 		if len(dto.Pages) == 0 && len(apiPages) == 0 {
 			if err != nil {
+				api.GetLogger().Err(err).Send()
 				return events.APIGatewayV2HTTPResponse{
 					StatusCode: 400,
 					Body:       err.Error(),
@@ -98,9 +126,12 @@ func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelec
 		}
 
 		// 3. Dedup and combine both sources of pages
-		pagesAdded := pageselection.UnionPages(dto, apiPages)
+		api.GetLogger().Debug().
+			Str("function", "handleRequestForApi").
+			Msg("Unioning pages")
+		pagesAdded := pageselection.UnionPages(dto, apiPages, api.GetLogger())
 		if pagesAdded {
-			persistence.PutPages(db, dto)
+			persistence.PutPages(db, dto, api.GetLogger())
 		}
 		selectedPage := selector.SelectPage(dto.Pages)
 

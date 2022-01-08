@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
 	"github.com/rs/zerolog"
@@ -20,6 +22,12 @@ type TestApiConfig struct {
 
 type TestSelector struct {
 	mock.Mock
+}
+
+type TestDynamoDb struct {
+	mock.Mock
+	dynamodbiface.DynamoDBAPI
+	outputMap map[string]*dynamodb.AttributeValue
 }
 
 const mockDatabaseId = "99999999abcdefgh1234000000000000"
@@ -62,6 +70,18 @@ func (selector *TestSelector) SelectPage(pages []notion.Page) *notion.Page {
 	return &pages[0]
 }
 
+func (db *TestDynamoDb) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+	db.MethodCalled("GetItem", input)
+	return &dynamodb.GetItemOutput{
+		Item: db.outputMap,
+	}, nil
+}
+
+func (db *TestDynamoDb) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+	db.MethodCalled("PutItem", input)
+	return &dynamodb.PutItemOutput{}, nil
+}
+
 func TestHandleRequest_Success(t *testing.T) {
 	api := &TestApiConfig{
 		pages: []notion.Page{
@@ -74,10 +94,14 @@ func TestHandleRequest_Success(t *testing.T) {
 		},
 	}
 	selector := &TestSelector{}
-	api.Mock.On("GetPages", "")    // Assert that PageGetter methods are called
-	selector.Mock.On("SelectPage") // Assert that PageSelector methods are called
+	db := &TestDynamoDb{}
+	api.Mock.On("GetPages", "") // Set expectations for mock methods
+	api.Mock.On("GetLogger")
+	selector.Mock.On("SelectPage")
+	db.Mock.On("GetItem", mock.Anything)
+	db.Mock.On("PutItem", mock.Anything)
 
-	result, err := execGetPage(api, selector)
+	result, err := exec(api, selector, db, mockDatabaseId)
 	require.NoError(t, err)
 	assert.EqualValues(t, api.pages[0].Url, result)
 	api.AssertExpectations(t)
@@ -87,12 +111,15 @@ func TestHandleRequest_Success(t *testing.T) {
 func TestHandleRequest_Error(t *testing.T) {
 	api := &TestApiConfig{}
 	selector := &TestSelector{}
-	api.Mock.On("GetPages", "") // Assert that PageGetter methods are called
+	db := &TestDynamoDb{}
+	api.Mock.On("GetPages", "") // Set expectations for mock methods
+	api.Mock.On("GetLogger")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
+	db.Mock.On("GetItem", mock.Anything)
 
-	result, err := execGetPage(api, selector)
+	result, err := exec(api, selector, db, mockDatabaseId)
 	require.Error(t, err)
-	assert.EqualValues(t, "", result)
+	assert.EqualValues(t, "No records found", result)
 	api.AssertExpectations(t)
 	selector.AssertExpectations(t)
 }

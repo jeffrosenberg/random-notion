@@ -36,7 +36,7 @@ type pageResponse struct {
 
 // Return pages from the Notion API, starting at an optional cursor string
 func (api *ApiConfig) GetPages(cursor string) ([]Page, error) {
-	api.Logger.Info().Msg("Getting pages")
+	api.Logger.Info().Str("function", "GetPages").Msg("Getting pages from API")
 	pages := []Page{}
 	hasMore := true
 

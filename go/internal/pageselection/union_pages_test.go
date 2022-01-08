@@ -5,6 +5,8 @@ import (
 
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,6 +18,8 @@ const mockPageUrl = "https://www.notion.so/Initial-goals-3350ba0448b143e387261b1
 const mockPageUrl2 = "https://www.notion.so/Chicken-korma-recipe-How-to-make-chicken-korma-Swasthi-s-Recipes-5331da2465974f2da684fd94a0f3278a"
 const mockPageUrl3 = "https://www.notion.so/Tampa-s-Best-Shuttle-Taxi-Service-Express-Transportation-240c0dcf833443e59a01a914c21de7e4"
 const mockTime = "2021-11-05T12:54:00.000Z"
+
+var logger *zerolog.Logger = &log.Logger
 
 func TestNonOverlappingUnion(t *testing.T) {
 	// Arrange
@@ -59,7 +63,7 @@ func TestNonOverlappingUnion(t *testing.T) {
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append)
+	pagesAdded := UnionPages(&input, append, logger)
 
 	// Assert
 	assert.Equal(t, true, pagesAdded)
@@ -126,7 +130,7 @@ func TestOverlappingUnion(t *testing.T) {
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append)
+	pagesAdded := UnionPages(&input, append, logger)
 
 	// Assert
 	assert.Equal(t, true, pagesAdded)
@@ -162,7 +166,7 @@ func TestNoPagesAdded(t *testing.T) {
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append)
+	pagesAdded := UnionPages(&input, append, logger)
 
 	// Assert
 	assert.Equal(t, false, pagesAdded)

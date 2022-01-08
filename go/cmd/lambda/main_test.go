@@ -33,6 +33,11 @@ type TestDynamoDb struct {
 	outputMap map[string]*dynamodb.AttributeValue
 }
 
+type TestPanic struct {
+	mock.Mock
+	dynamodbiface.DynamoDBAPI
+}
+
 const mockDatabaseId = "99999999abcdefgh1234000000000000"
 const mockPageId = "3350ba04-48b1-43e3-8726-1b1e9828b2b3"
 const mockPageUrl = "https://www.notion.so/Initial-goals-3350ba0448b143e387261b1e9828b2b3"
@@ -99,6 +104,11 @@ func (db *TestDynamoDb) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItem
 func (db *TestDynamoDb) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
 	db.MethodCalled("PutItem", input)
 	return &dynamodb.PutItemOutput{}, nil
+}
+
+func (db *TestPanic) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+	db.MethodCalled("GetItem", input)
+	panic("A panic happened!")
 }
 
 func TestRetrieveAllRecordsFromNotionApi(t *testing.T) {
@@ -178,8 +188,8 @@ func TestRetrieveAllRecordsFromDynamoDb(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{
 		outputMap: map[string]*dynamodb.AttributeValue{
-			"DatabaseId": {S: aws.String(mockDatabaseId)},
-			"Pages": {
+			"database_id": {S: aws.String(mockDatabaseId)},
+			"pages": {
 				L: []*dynamodb.AttributeValue{
 					{
 						M: map[string]*dynamodb.AttributeValue{
@@ -198,7 +208,7 @@ func TestRetrieveAllRecordsFromDynamoDb(t *testing.T) {
 	api.Mock.On("GetLogger")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
-	// db.Mock.On("PutItem", mock.Anything)
+	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
 	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
 
 	// Act
@@ -238,8 +248,8 @@ func TestRetrieveRecordsFromMultipleSources(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{
 		outputMap: map[string]*dynamodb.AttributeValue{
-			"DatabaseId": {S: aws.String(mockDatabaseId)},
-			"Pages": {
+			"database_id": {S: aws.String(mockDatabaseId)},
+			"pages": {
 				L: []*dynamodb.AttributeValue{
 					{
 						M: map[string]*dynamodb.AttributeValue{
@@ -251,7 +261,7 @@ func TestRetrieveRecordsFromMultipleSources(t *testing.T) {
 					},
 				},
 			},
-			"NextCursor": {S: aws.String("5331da24-6597-4f2d-a684-fd94a0f3278a")},
+			"next_cursor": {S: aws.String("5331da24-6597-4f2d-a684-fd94a0f3278a")},
 		},
 	}
 	event := events.APIGatewayV2HTTPRequest{}
@@ -275,6 +285,94 @@ func TestRetrieveRecordsFromMultipleSources(t *testing.T) {
 	assert.EqualValues(t, expected, result)
 	api.AssertExpectations(t)
 	selector.AssertExpectations(t)
+	db.AssertExpectations(t)
+}
+
+func TestNoNewRecordsInApi(t *testing.T) {
+	// Arrange
+	api := &TestApiConfig{
+		pages: []notion.Page{
+			{
+				Id:             mockPageId,
+				CreatedTime:    mockTime,
+				LastEditedTime: mockTime,
+				Url:            mockPageUrl,
+			},
+		},
+	}
+	selector := &TestSelector{}
+	db := &TestDynamoDb{
+		outputMap: map[string]*dynamodb.AttributeValue{
+			"database_id": {S: aws.String(mockDatabaseId)},
+			"pages": {
+				L: []*dynamodb.AttributeValue{
+					{
+						M: map[string]*dynamodb.AttributeValue{
+							"id":               {S: aws.String(mockPageId)},
+							"created_time":     {S: aws.String(mockTime)},
+							"last_edited_time": {S: aws.String(mockTime)},
+							"url":              {S: aws.String(mockPageUrl)},
+						},
+					},
+				},
+			},
+			"next_cursor": {S: aws.String(mockPageId)},
+		},
+	}
+	event := events.APIGatewayV2HTTPRequest{}
+	api.Mock.On("GetPages", mockPageId) // Set expectations for mock methods
+	api.Mock.On("GetLogger")
+	selector.Mock.On("SelectPage")
+	db.Mock.On("GetItem", mock.Anything)
+	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
+	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+
+	// Act
+	result, err := handler(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err)
+	expected := events.APIGatewayV2HTTPResponse{
+		StatusCode: 200,
+		Body:       fmt.Sprintf("{\"id\":\"%s\", \"url\":\"%s\"}", mockPageId, mockPageUrl),
+		Headers:    map[string]string{"Content-Type": "application/json"},
+	}
+	assert.EqualValues(t, expected, result)
+	api.AssertExpectations(t)
+	selector.AssertExpectations(t)
+	db.AssertExpectations(t)
+}
+
+func TestRecoverFromPanic(t *testing.T) {
+	// Arrange
+	api := &TestApiConfig{
+		pages: []notion.Page{
+			{
+				Id:             mockPageId,
+				CreatedTime:    mockTime,
+				LastEditedTime: mockTime,
+				Url:            mockPageUrl,
+			},
+		},
+	}
+	selector := &TestSelector{}
+	db := &TestPanic{}
+	event := events.APIGatewayV2HTTPRequest{}
+	api.Mock.On("GetLogger")
+	db.Mock.On("GetItem", mock.Anything)
+	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+
+	// Act
+	result, err := handler(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err)
+	expected := events.APIGatewayV2HTTPResponse{
+		StatusCode: 500,
+		Body:       "Internal server error",
+	}
+	assert.EqualValues(t, expected, result)
+	api.AssertExpectations(t)
 	db.AssertExpectations(t)
 }
 

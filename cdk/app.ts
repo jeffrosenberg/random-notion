@@ -3,16 +3,27 @@ import * as integrations from "@aws-cdk/aws-apigatewayv2-integrations";
 import * as cdk from "@aws-cdk/core";
 import { Duration } from "@aws-cdk/core";
 import Function from "./constructs/function";
-import * as secretsmanager from '@aws-cdk/aws-secretsmanager';
+import * as secretsmanager from "@aws-cdk/aws-secretsmanager";
+import * as dynamodb from "@aws-cdk/aws-dynamodb";
 
 class Stack extends cdk.Stack {
   constructor(scope: cdk.App, id: string) {
     super(scope, id);
 
-    const apiHandler = new Function(this, "RandomNotionFunction", { 
+    // Create DynamoDb table
+    const table = new dynamodb.Table(this, 'random-notion-cache', {
+      partitionKey: { name: 'database_id', type: dynamodb.AttributeType.STRING },
+    });
+
+    // Create API and link to DynamoDb
+    const logLevel = 0;  // Debug = 0, Info = 1, Trace = -1
+    const apiHandler = new Function(this, "RandomNotionFunction", logLevel, { 
       entry: "../go/cmd/lambda",
       moduleDir: "../go/go.mod",
       timeout: Duration.seconds(30),
+      environment: {
+        CACHE_TABLE_NAME: table.tableName,
+      },
     });
     const api = new apigw.HttpApi(this, "RandomNotionAPI");
 
@@ -32,6 +43,9 @@ class Stack extends cdk.Stack {
       apiKeySecretArn
     );
     apiKeySecret.grantRead(apiHandler);
+
+    // Grant access to DynamoDb table
+    table.grantReadWriteData(apiHandler);
   }
 }
 

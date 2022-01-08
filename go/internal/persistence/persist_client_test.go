@@ -41,11 +41,11 @@ func TestGetNoPagesFoundReturnsDefault(t *testing.T) {
 	mockClient.MockDbContents = make(map[string]*dynamodb.AttributeValue)
 
 	// Act
-	result, err := GetPages(mockClient, &databaseId)
+	result, err := GetPages(mockClient, &databaseId, nil)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, "", result.DatabaseId)
+	assert.Equal(t, databaseId, result.DatabaseId)
 	assert.Nil(t, result.Pages)
 	assert.Equal(t, "", result.NextCursor)
 }
@@ -58,7 +58,7 @@ func TestGetReturnsNotionPages(t *testing.T) {
 	expected := testDataStruct
 
 	// Act
-	result, err := GetPages(mockClient, &databaseId)
+	result, err := GetPages(mockClient, &databaseId, nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestPutPagesCalled(t *testing.T) {
 	mockClient.Mock.On("PutItem", mock.Anything) // Assert that PutItem is called
 
 	// Act
-	err := PutPages(mockClient, testDataStruct)
+	err := PutPages(mockClient, testDataStruct, nil)
 
 	// Assert
 	require.NoError(t, err)
@@ -81,8 +81,8 @@ func TestPutPagesCalled(t *testing.T) {
 }
 
 var testDataDynamoDbAttribute map[string]*dynamodb.AttributeValue = map[string]*dynamodb.AttributeValue{
-	"DatabaseId": {S: aws.String(databaseId)},
-	"Pages": {
+	"database_id": {S: aws.String(databaseId)},
+	"pages": {
 		L: []*dynamodb.AttributeValue{
 			{
 				M: map[string]*dynamodb.AttributeValue{
@@ -102,7 +102,7 @@ var testDataDynamoDbAttribute map[string]*dynamodb.AttributeValue = map[string]*
 			},
 		},
 	},
-	"NextCursor": {S: aws.String(nextCursor)},
+	"next_cursor": {S: aws.String(nextCursor)},
 }
 
 var testDataStruct *NotionDTO = &NotionDTO{
