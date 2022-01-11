@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/jeffrosenberg/random-notion/internal/pageselection"
+	selection "github.com/jeffrosenberg/random-notion/internal/pageselection"
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
@@ -31,8 +31,10 @@ type AwsSecret struct {
 	DatabaseId string `json:"database_id"`
 }
 
-func exec(api notion.PageGetter, selector pageselection.PageSelector,
-	db dynamodbiface.DynamoDBAPI, databaseId string) (string, error) {
+func exec(api notion.PageGetter, selector selection.PageSelector,
+	db dynamodbiface.DynamoDBAPI) (string, error) {
+	databaseId := api.GetDatabaseId()
+
 	// 1. Get cached pages from DynamoDb
 	dto, err := persistence.GetPages(db, &databaseId, api.GetLogger())
 	if dto == nil {
@@ -65,7 +67,7 @@ func exec(api notion.PageGetter, selector pageselection.PageSelector,
 	}
 
 	// 3. Dedup and combine both sources of pages
-	pagesAdded := pageselection.UnionPages(dto, apiPages, api.GetLogger())
+	pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
 	if pagesAdded {
 		persistence.PutPages(db, dto, api.GetLogger())
 	}
@@ -146,14 +148,14 @@ func main() {
 		Logger:      &log.Logger,
 	}
 	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	selector := &pageselection.RandomPage{}
+	selector := &selection.RandomPage{}
 	sess := session.Must(session.NewSession())
 	if api.DatabaseId == "" || api.SecretToken == "" {
 		setApiSecrets(api, sess)
 	}
 	db := dynamodb.New(sess)
 
-	output, err := exec(api, selector, db, api.DatabaseId)
+	output, err := exec(api, selector, db)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(2)

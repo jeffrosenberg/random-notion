@@ -56,6 +56,11 @@ func (api *TestApiConfig) GetAllPages() ([]notion.Page, error) {
 	return api.pages, nil
 }
 
+func (api *TestApiConfig) GetDatabaseId() string {
+	api.MethodCalled("GetDatabaseId")
+	return mockDatabaseId
+}
+
 func (api *TestApiConfig) GetLogger() *zerolog.Logger {
 	api.MethodCalled("GetLogger")
 	return &log.Logger
@@ -97,11 +102,12 @@ func TestHandleRequest_Success(t *testing.T) {
 	db := &TestDynamoDb{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	db.Mock.On("PutItem", mock.Anything)
 
-	result, err := exec(api, selector, db, mockDatabaseId)
+	result, err := exec(api, selector, db)
 	require.NoError(t, err)
 	assert.EqualValues(t, api.pages[0].Url, result)
 	api.AssertExpectations(t)
@@ -114,10 +120,11 @@ func TestHandleRequest_Error(t *testing.T) {
 	db := &TestDynamoDb{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)
 
-	result, err := exec(api, selector, db, mockDatabaseId)
+	result, err := exec(api, selector, db)
 	require.Error(t, err)
 	assert.EqualValues(t, "No records found", result)
 	api.AssertExpectations(t)

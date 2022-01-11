@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/jeffrosenberg/random-notion/internal/pageselection"
+	selection "github.com/jeffrosenberg/random-notion/internal/pageselection"
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
@@ -44,18 +44,26 @@ type AwsSecret struct {
 }
 
 // Closure for injection of notion.PageGetter interface
-// TODO: Revisit whether there's a more elegant way to get databaseId
-func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelector,
-	db dynamodbiface.DynamoDBAPI, databaseId string) HandlerFn {
+func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
+	db dynamodbiface.DynamoDBAPI) HandlerFn {
 	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (event events.APIGatewayV2HTTPResponse, err error) {
 		var dto *persistence.NotionDTO
 		var apiPages []notion.Page
+		databaseId := api.GetDatabaseId()
 
 		createLogger(ctx, api)
 		api.GetLogger().Debug().
 			Str("function", "handleRequestForApi").
 			Str("log_level", api.GetLogger().GetLevel().String()).
 			Msg("Random Notion handler triggered")
+
+		if databaseId == "" {
+			api.GetLogger().Warn().Msg("No DatabaseId provided")
+			return events.APIGatewayV2HTTPResponse{
+				StatusCode: 400,
+				Body:       "No DatabaseId provided",
+			}, nil
+		}
 
 		// Recover from a panic and return a 500 error
 		defer func() {
@@ -129,7 +137,7 @@ func handleRequestForApi(api notion.PageGetter, selector pageselection.PageSelec
 		api.GetLogger().Debug().
 			Str("function", "handleRequestForApi").
 			Msg("Unioning pages")
-		pagesAdded := pageselection.UnionPages(dto, apiPages, api.GetLogger())
+		pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
 		if pagesAdded {
 			persistence.PutPages(db, dto, api.GetLogger())
 		}
@@ -235,10 +243,10 @@ func setApiSecrets(api *notion.ApiConfig, sess *session.Session) {
 func main() {
 	// Initialize interfaces
 	api := notion.NewApiConfig()
-	selector := &pageselection.RandomPage{}
+	selector := &selection.RandomPage{}
 	sess := session.Must(session.NewSession())
 	setApiSecrets(api, sess)
 	db := dynamodb.New(sess)
 
-	lambda.Start(handleRequestForApi(api, selector, db, api.DatabaseId))
+	lambda.Start(handleRequestForApi(api, selector, db))
 }

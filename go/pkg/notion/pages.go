@@ -19,6 +19,7 @@ type Page struct {
 type PageGetter interface {
 	GetPages(string) ([]Page, error)
 	GetAllPages() ([]Page, error)
+	GetDatabaseId() string
 	Logger
 }
 
@@ -62,6 +63,10 @@ func (api *ApiConfig) GetPages(cursor string) ([]Page, error) {
 // Return all pages from the Notion API
 func (api *ApiConfig) GetAllPages() ([]Page, error) {
 	return api.GetPages("")
+}
+
+func (api *ApiConfig) GetDatabaseId() string {
+	return api.DatabaseId
 }
 
 func (api *ApiConfig) queryPages(cursor string) (pageResponse, error) {

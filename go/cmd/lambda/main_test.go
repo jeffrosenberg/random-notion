@@ -20,7 +20,8 @@ import (
 
 type TestApiConfig struct {
 	mock.Mock
-	pages []notion.Page
+	pages      []notion.Page
+	databaseId *string
 }
 
 type TestSelector struct {
@@ -73,6 +74,14 @@ func (api *TestApiConfig) GetAllPages() ([]notion.Page, error) {
 	}
 
 	return api.pages, nil
+}
+
+func (api *TestApiConfig) GetDatabaseId() string {
+	api.MethodCalled("GetDatabaseId")
+	if api.databaseId != nil {
+		return *api.databaseId
+	}
+	return mockDatabaseId
 }
 
 func (api *TestApiConfig) GetLogger() *zerolog.Logger {
@@ -128,10 +137,11 @@ func TestRetrieveAllRecordsFromNotionApi(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	db.Mock.On("PutItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -161,9 +171,10 @@ func TestFailGracefullyWhenNoPagesExist(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -206,10 +217,11 @@ func TestRetrieveAllRecordsFromDynamoDb(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -267,10 +279,11 @@ func TestRetrieveRecordsFromMultipleSources(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", "5331da24-6597-4f2d-a684-fd94a0f3278a") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	db.Mock.On("PutItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -322,10 +335,11 @@ func TestNoNewRecordsInApi(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", mockPageId) // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -360,7 +374,8 @@ func TestRecoverFromPanic(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetLogger")
 	db.Mock.On("GetItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	api.Mock.On("GetDatabaseId")
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -384,9 +399,10 @@ func TestHandleNotionApiError(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetPages", "") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
+	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db, mockDatabaseId)
+	handler := handleRequestForApi(api, selector, db)
 
 	// Act
 	result, err := handler(context.Background(), event)
@@ -396,6 +412,33 @@ func TestHandleNotionApiError(t *testing.T) {
 	expected := events.APIGatewayV2HTTPResponse{
 		StatusCode: 400,
 		Body:       "No pages found",
+	}
+	assert.EqualValues(t, expected, result)
+	api.AssertExpectations(t)
+	selector.AssertExpectations(t)
+}
+
+func TestErrorWhenNoDatabaseId(t *testing.T) {
+	// Arrange
+	emptyString := ""
+	api := &TestApiConfig{
+		databaseId: &emptyString,
+	}
+	selector := &TestSelector{}
+	db := &TestDynamoDb{}
+	event := events.APIGatewayV2HTTPRequest{}
+	api.Mock.On("GetDatabaseId") // Set expectations for mock methods
+	api.Mock.On("GetLogger")
+	handler := handleRequestForApi(api, selector, db)
+
+	// Act
+	result, err := handler(context.Background(), event)
+
+	// Assert
+	require.NoError(t, err) // Client-side error, no err object needed here
+	expected := events.APIGatewayV2HTTPResponse{
+		StatusCode: 400,
+		Body:       "No DatabaseId provided",
 	}
 	assert.EqualValues(t, expected, result)
 	api.AssertExpectations(t)
