@@ -178,6 +178,6 @@ func TestRetrieveDatabaseNotFound(t *testing.T) {
 	defer ts.Close()
 
 	db, err := api.GetDatabase()
-	assert.Error(t, err) // TODO: More specific error assertions
+	assert.Error(t, err)
 	assert.Nil(t, db)
 }

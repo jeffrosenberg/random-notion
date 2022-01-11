@@ -401,29 +401,3 @@ func TestHandleNotionApiError(t *testing.T) {
 	api.AssertExpectations(t)
 	selector.AssertExpectations(t)
 }
-
-// TODO: remove if not using this
-// var testDataDynamoDbAttribute map[string]*dynamodb.AttributeValue = map[string]*dynamodb.AttributeValue{
-// 	"DatabaseId": {S: aws.String(mockDatabaseId)},
-// 	"Pages": {
-// 		L: []*dynamodb.AttributeValue{
-// 			{
-// 				M: map[string]*dynamodb.AttributeValue{
-// 					"id":               {S: aws.String("3350ba04-48b1-43e3-8726-1b1e9828b2b3")},
-// 					"created_time":     {S: aws.String("2021-11-05T12:54:00.000Z")},
-// 					"last_edited_time": {S: aws.String("2021-11-05T12:55:00.000Z")},
-// 					"url":              {S: aws.String("https://www.notion.so/Initial-goals-3350ba0448b143e387261b1e9828b2b3")},
-// 				},
-// 			},
-// 			{
-// 				M: map[string]*dynamodb.AttributeValue{
-// 					"id":               {S: aws.String("5331da24-6597-4f2d-a684-fd94a0f3278a")},
-// 					"created_time":     {S: aws.String("2021-11-01T01:01:00.000Z")},
-// 					"last_edited_time": {S: aws.String("2021-11-01T13:24:00.000Z")},
-// 					"url":              {S: aws.String("https://www.notion.so/Chicken-korma-recipe-How-to-make-chicken-korma-Swasthi-s-Recipes-5331da2465974f2da684fd94a0f3278a")},
-// 				},
-// 			},
-// 		},
-// 	},
-// 	"NextCursor": {S: aws.String(nextCursor)},
-// }

@@ -20,7 +20,7 @@ type MockDynamoDb struct {
 	mock.Mock
 	dynamodbiface.DynamoDBAPI
 	// Set in unit test arrangement to "populate" the database
-	MockDbContents map[string]*dynamodb.AttributeValue //TODO: Should be able to use mock.TestData somehow?
+	MockDbContents map[string]*dynamodb.AttributeValue
 }
 
 func (mock MockDynamoDb) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {

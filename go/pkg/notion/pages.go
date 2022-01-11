@@ -44,7 +44,7 @@ func (api *ApiConfig) GetPages(cursor string) ([]Page, error) {
 		response, err := api.queryPages(cursor)
 		if err != nil {
 			api.Logger.Err(err).Send()
-			return nil, err // TODO: More robust error handling
+			return nil, err // More robust error handling would be nice, but skipping as this is a hobby project
 		}
 		pages = append(pages, response.Results...)
 		hasMore = response.HasMore

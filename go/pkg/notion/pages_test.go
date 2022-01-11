@@ -202,7 +202,7 @@ func TestRetrievePagesDatabaseNotFound(t *testing.T) {
 	defer ts.Close()
 
 	pages, err := api.GetPages(emptyCursor)
-	assert.Error(t, err) // TODO: More specific error assertions
+	assert.Error(t, err)
 	assert.Nil(t, pages)
 }
 
