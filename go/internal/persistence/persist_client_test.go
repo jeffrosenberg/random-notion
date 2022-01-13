@@ -1,9 +1,12 @@
 package persistence
 
 import (
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -15,6 +18,19 @@ import (
 
 var databaseId string = "99999999-abcd-efgh-1234-000000000000"
 var nextCursor string = "5331da24-6597-4f2d-a684-fd94a0f3278a"
+
+const mockTimestring string = "2021-12-10 01:00:00 CST"
+const mockTimestamp int64 = 1639119600
+
+func mockTime() *time.Time {
+	result, _ := time.Parse("2006-01-02 15:04:05 MST", mockTimestring)
+	return &result
+}
+
+func mockLogger() *zerolog.Logger {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	return &zerolog.Logger{}
+}
 
 type MockDynamoDb struct {
 	mock.Mock
@@ -41,13 +57,13 @@ func TestGetNoPagesFoundReturnsDefault(t *testing.T) {
 	mockClient.MockDbContents = make(map[string]*dynamodb.AttributeValue)
 
 	// Act
-	result, err := GetPages(mockClient, &databaseId, nil)
+	result, err := GetPages(mockClient, &databaseId, mockLogger())
 
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, databaseId, result.DatabaseId)
 	assert.Nil(t, result.Pages)
-	assert.Equal(t, "", result.NextCursor)
+	assert.Equal(t, int64(0), result.LastQuery)
 }
 
 func TestGetReturnsNotionPages(t *testing.T) {
@@ -58,13 +74,13 @@ func TestGetReturnsNotionPages(t *testing.T) {
 	expected := testDataStruct
 
 	// Act
-	result, err := GetPages(mockClient, &databaseId, nil)
+	result, err := GetPages(mockClient, &databaseId, mockLogger())
 
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, databaseId, result.DatabaseId)
 	assert.Equal(t, expected.Pages, result.Pages)
-	assert.Equal(t, nextCursor, result.NextCursor)
+	assert.Equal(t, mockTimestamp, result.LastQuery)
 }
 
 func TestPutPagesCalled(t *testing.T) {
@@ -73,7 +89,7 @@ func TestPutPagesCalled(t *testing.T) {
 	mockClient.Mock.On("PutItem", mock.Anything) // Assert that PutItem is called
 
 	// Act
-	err := PutPages(mockClient, testDataStruct, nil)
+	err := PutPages(mockClient, testDataStruct, mockLogger())
 
 	// Assert
 	require.NoError(t, err)
@@ -102,7 +118,7 @@ var testDataDynamoDbAttribute map[string]*dynamodb.AttributeValue = map[string]*
 			},
 		},
 	},
-	"next_cursor": {S: aws.String(nextCursor)},
+	"last_query": {N: aws.String(strconv.FormatInt(mockTimestamp, 10))},
 }
 
 var testDataStruct *NotionDTO = &NotionDTO{
@@ -121,5 +137,5 @@ var testDataStruct *NotionDTO = &NotionDTO{
 			Url:            "https://www.notion.so/Chicken-korma-recipe-How-to-make-chicken-korma-Swasthi-s-Recipes-5331da2465974f2da684fd94a0f3278a",
 		},
 	},
-	NextCursor: nextCursor,
+	LastQuery: mockTimestamp,
 }

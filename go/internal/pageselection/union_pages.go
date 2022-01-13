@@ -30,18 +30,15 @@ func UnionPages(dto *persistence.NotionDTO, addl []notion.Page, logger *zerolog.
 
 	// Dedup incoming slice of pages
 	pagesToAppend := make([]notion.Page, 0, len(addl))
-	cursor := dto.NextCursor
 	for _, page := range addl {
 		_, exists := ids[page.Id]
 		if !exists {
 			pagesToAppend = append(pagesToAppend, page)
-			cursor = page.Id
 			pagesAdded = true
 		}
 	}
 
 	// Update NotionPages DTO with deduped additional pages
 	dto.Pages = append(dto.Pages, pagesToAppend...)
-	dto.NextCursor = cursor
 	return
 }

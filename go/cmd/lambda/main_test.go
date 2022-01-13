@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -43,20 +43,23 @@ const mockDatabaseId = "99999999abcdefgh1234000000000000"
 const mockPageId = "3350ba04-48b1-43e3-8726-1b1e9828b2b3"
 const mockPageUrl = "https://www.notion.so/Initial-goals-3350ba0448b143e387261b1e9828b2b3"
 const mockTime = "2021-11-05T12:54:00.000Z"
+const mockTimestamp string = "1639119600"
 const nextCursor string = "5331da24-6597-4f2d-a684-fd94a0f3278a"
 
-func (api *TestApiConfig) GetPages(cursor string) ([]notion.Page, error) {
-	api.MethodCalled("GetPages", cursor)
+func (api *TestApiConfig) GetPagesSinceTime(sinceTime time.Time) ([]notion.Page, error) {
+	api.MethodCalled("GetPagesSinceTime", sinceTime.Format(notion.ISO_TIME))
 
 	if api.pages == nil {
 		return nil, fmt.Errorf("No pages found")
 	}
 
-	// Slice api.pages depending on cursor input; if no cursor, take all
+	// Slice api.pages depending on filter input; if no filter, take all
+	// This depends on test inputs being pre-sorted by date,
+	// but this is a reasonable shortcut for unit testing
 	index := 0
-	if cursor != "" {
+	if !sinceTime.IsZero() {
 		for i, v := range api.pages {
-			if v.Id == cursor {
+			if parsedTime, _ := time.Parse(notion.ISO_TIME, v.CreatedTime); parsedTime.After(sinceTime) {
 				index = i
 				break
 			}
@@ -66,8 +69,8 @@ func (api *TestApiConfig) GetPages(cursor string) ([]notion.Page, error) {
 	return api.pages[index:], nil
 }
 
-func (api *TestApiConfig) GetAllPages() ([]notion.Page, error) {
-	api.MethodCalled("GetAllPages")
+func (api *TestApiConfig) GetPages() ([]notion.Page, error) {
+	api.MethodCalled("GetPages")
 
 	if api.pages == nil {
 		return nil, fmt.Errorf("No pages found")
@@ -86,7 +89,8 @@ func (api *TestApiConfig) GetDatabaseId() string {
 
 func (api *TestApiConfig) GetLogger() *zerolog.Logger {
 	api.MethodCalled("GetLogger")
-	return &log.Logger
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	return &zerolog.Logger{}
 }
 
 func (api *TestApiConfig) SetLogger(logger *zerolog.Logger) {
@@ -135,15 +139,17 @@ func TestRetrieveAllRecordsFromNotionApi(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	db.Mock.On("PutItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -169,14 +175,16 @@ func TestFailGracefullyWhenNoPagesExist(t *testing.T) {
 		outputMap: make(map[string]*dynamodb.AttributeValue),
 	}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -215,15 +223,17 @@ func TestRetrieveAllRecordsFromDynamoDb(t *testing.T) {
 		},
 	}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -273,19 +283,21 @@ func TestRetrieveRecordsFromMultipleSources(t *testing.T) {
 					},
 				},
 			},
-			"next_cursor": {S: aws.String("5331da24-6597-4f2d-a684-fd94a0f3278a")},
+			"last_query": {S: aws.String("1635746000")},
 		},
 	}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", "5331da24-6597-4f2d-a684-fd94a0f3278a") // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	db.Mock.On("PutItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -329,19 +341,21 @@ func TestNoNewRecordsInApi(t *testing.T) {
 					},
 				},
 			},
-			"next_cursor": {S: aws.String(mockPageId)},
+			"last_query": {N: aws.String(mockTimestamp)},
 		},
 	}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", mockPageId) // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
 	// db.Mock.On("PutItem", mock.Anything) // PutItem should NOT be called
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -375,9 +389,9 @@ func TestRecoverFromPanic(t *testing.T) {
 	api.Mock.On("GetLogger")
 	db.Mock.On("GetItem", mock.Anything)
 	api.Mock.On("GetDatabaseId")
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -397,14 +411,16 @@ func TestHandleNotionApiError(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
 	event := events.APIGatewayV2HTTPRequest{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+
+	// Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything)
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert
@@ -429,9 +445,9 @@ func TestErrorWhenNoDatabaseId(t *testing.T) {
 	event := events.APIGatewayV2HTTPRequest{}
 	api.Mock.On("GetDatabaseId") // Set expectations for mock methods
 	api.Mock.On("GetLogger")
-	handler := handleRequestForApi(api, selector, db)
 
 	// Act
+	handler := handleRequestForApi(api, selector, db)
 	result, err := handler(context.Background(), event)
 
 	// Assert

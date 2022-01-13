@@ -6,7 +6,6 @@ import (
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,9 +16,13 @@ const mockPageId3 string = "240c0dcf-8334-43e5-9a01-a914c21de7e4"
 const mockPageUrl = "https://www.notion.so/Initial-goals-3350ba0448b143e387261b1e9828b2b3"
 const mockPageUrl2 = "https://www.notion.so/Chicken-korma-recipe-How-to-make-chicken-korma-Swasthi-s-Recipes-5331da2465974f2da684fd94a0f3278a"
 const mockPageUrl3 = "https://www.notion.so/Tampa-s-Best-Shuttle-Taxi-Service-Express-Transportation-240c0dcf833443e59a01a914c21de7e4"
-const mockTime = "2021-11-05T12:54:00.000Z"
+const mockCreatedTime = "2021-11-05T12:54:00.000Z"
+const mockLastQueryTime int64 = 1639119600
 
-var logger *zerolog.Logger = &log.Logger
+func mockLogger() *zerolog.Logger {
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	return &zerolog.Logger{}
+}
 
 func TestNonOverlappingUnion(t *testing.T) {
 	// Arrange
@@ -28,18 +31,18 @@ func TestNonOverlappingUnion(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 		},
-		NextCursor: mockPageId2,
+		LastQuery: mockLastQueryTime,
 	}
 	append := []notion.Page{
 		{
 			Id:             mockPageId2,
-			CreatedTime:    mockTime,
-			LastEditedTime: mockTime,
+			CreatedTime:    mockCreatedTime,
+			LastEditedTime: mockCreatedTime,
 			Url:            mockPageUrl2,
 		},
 	}
@@ -48,22 +51,22 @@ func TestNonOverlappingUnion(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 			{
 				Id:             mockPageId2,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl2,
 			},
 		},
-		NextCursor: mockPageId2,
+		LastQuery: mockLastQueryTime,
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append, logger)
+	pagesAdded := UnionPages(&input, append, mockLogger())
 
 	// Assert
 	assert.Equal(t, true, pagesAdded)
@@ -77,30 +80,30 @@ func TestOverlappingUnion(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 			{
 				Id:             mockPageId2,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl2,
 			},
 		},
-		NextCursor: mockPageId2,
+		LastQuery: mockLastQueryTime,
 	}
 	append := []notion.Page{
 		{
 			Id:             mockPageId2,
-			CreatedTime:    mockTime,
-			LastEditedTime: mockTime,
+			CreatedTime:    mockCreatedTime,
+			LastEditedTime: mockCreatedTime,
 			Url:            mockPageUrl2,
 		},
 		{
 			Id:             mockPageId3,
-			CreatedTime:    mockTime,
-			LastEditedTime: mockTime,
+			CreatedTime:    mockCreatedTime,
+			LastEditedTime: mockCreatedTime,
 			Url:            mockPageUrl3,
 		},
 	}
@@ -109,28 +112,28 @@ func TestOverlappingUnion(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 			{
 				Id:             mockPageId2,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl2,
 			},
 			{
 				Id:             mockPageId3,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl3,
 			},
 		},
-		NextCursor: mockPageId3,
+		LastQuery: mockLastQueryTime,
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append, logger)
+	pagesAdded := UnionPages(&input, append, mockLogger())
 
 	// Assert
 	assert.Equal(t, true, pagesAdded)
@@ -144,12 +147,12 @@ func TestNoPagesAdded(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 		},
-		NextCursor: mockPageId,
+		LastQuery: mockLastQueryTime,
 	}
 	append := []notion.Page{}
 	expected := persistence.NotionDTO{
@@ -157,16 +160,16 @@ func TestNoPagesAdded(t *testing.T) {
 		Pages: []notion.Page{
 			{
 				Id:             mockPageId,
-				CreatedTime:    mockTime,
-				LastEditedTime: mockTime,
+				CreatedTime:    mockCreatedTime,
+				LastEditedTime: mockCreatedTime,
 				Url:            mockPageUrl,
 			},
 		},
-		NextCursor: mockPageId,
+		LastQuery: mockLastQueryTime,
 	}
 
 	// Act
-	pagesAdded := UnionPages(&input, append, logger)
+	pagesAdded := UnionPages(&input, append, mockLogger())
 
 	// Assert
 	assert.Equal(t, false, pagesAdded)

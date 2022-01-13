@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,6 +34,7 @@ type AwsSecret struct {
 
 func exec(api notion.PageGetter, selector selection.PageSelector,
 	db dynamodbiface.DynamoDBAPI) (string, error) {
+	execStartTime := time.Now().Unix()
 	databaseId := api.GetDatabaseId()
 
 	// 1. Get cached pages from DynamoDb
@@ -45,12 +47,12 @@ func exec(api notion.PageGetter, selector selection.PageSelector,
 		dto = &persistence.NotionDTO{
 			DatabaseId: databaseId,
 			Pages:      []notion.Page{},
-			NextCursor: "",
+			LastQuery:  execStartTime,
 		}
 	}
 
 	// 2. Get additional pages from the Notion API
-	apiPages, err := api.GetPages(dto.NextCursor)
+	apiPages, err := api.GetPagesSinceTime(time.Unix(dto.LastQuery, 0))
 	if err != nil {
 		api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
 		// We could still read from the API, so set apiPages to a stub and keep going
@@ -69,6 +71,7 @@ func exec(api notion.PageGetter, selector selection.PageSelector,
 	// 3. Dedup and combine both sources of pages
 	pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
 	if pagesAdded {
+		dto.LastQuery = execStartTime
 		persistence.PutPages(db, dto, api.GetLogger())
 	}
 	selectedPage := selector.SelectPage(dto.Pages)

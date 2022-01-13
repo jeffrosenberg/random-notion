@@ -33,6 +33,32 @@ func mockNotionServer(mockData string, status int) (*httptest.Server, *ApiConfig
 	return server, api
 }
 
+func mockNotionServerWithFiltering(mockData string, status int) (*httptest.Server, *ApiConfig) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if notionHeaderIsValid(w, r) {
+			w.WriteHeader(status)
+			if filterValuePassed(r) {
+				var pageResponse pageResponse
+				json.Unmarshal([]byte(mockData), &pageResponse)
+				pageResponse.Results = pageResponse.Results[2:]
+				newJson, _ := json.Marshal(pageResponse)
+				w.Write(newJson)
+			} else {
+				w.Write([]byte(mockData))
+			}
+		}
+	}))
+
+	api := &ApiConfig{
+		Url:         server.URL,
+		DatabaseId:  mockDatabaseId,
+		SecretToken: mockApiToken,
+		Logger:      &log.Logger,
+	}
+
+	return server, api
+}
+
 func mockNotionServerWithPaging(mockData []string, status int) (*httptest.Server, *ApiConfig) {
 	i := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +102,15 @@ func cursorValuePassed(r *http.Request) bool {
 	var pageRequest pageRequest
 	json.Unmarshal(body, &pageRequest)
 	return pageRequest.StartCursor == mockCursor
+}
+
+func filterValuePassed(r *http.Request) bool {
+	body, _ := io.ReadAll(r.Body)
+	defer r.Body.Close()
+
+	var pageRequest pageRequest
+	json.Unmarshal(body, &pageRequest)
+	return pageRequest.Filter.Date.After != ""
 }
 
 func contains(input []string, expected string) bool {

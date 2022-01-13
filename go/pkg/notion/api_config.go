@@ -6,7 +6,8 @@ import (
 )
 
 const API_URI = "https://api.notion.com/v1"
-const DEFAULT_PAGE_SIZE = uint8(10)
+const ISO_TIME = "2006-01-02T15:04:05-0700"
+const DEFAULT_PAGE_SIZE = uint8(100)
 
 type ApiConfig struct {
 	Url         string

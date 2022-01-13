@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
@@ -32,22 +33,18 @@ type TestDynamoDb struct {
 
 const mockDatabaseId = "99999999abcdefgh1234000000000000"
 
-func (api *TestApiConfig) GetPages(cursor string) ([]notion.Page, error) {
-	api.MethodCalled("GetPages", cursor)
+func (api *TestApiConfig) GetPagesSinceTime(sinceTime time.Time) ([]notion.Page, error) {
+	api.MethodCalled("GetPagesSinceTime")
 
 	if api.pages == nil {
 		return nil, fmt.Errorf("No pages found")
 	}
 
-	if cursor == "" {
-		return api.pages, nil
-	}
-
-	return nil, fmt.Errorf("Test method not implemented")
+	return api.pages, nil
 }
 
-func (api *TestApiConfig) GetAllPages() ([]notion.Page, error) {
-	api.MethodCalled("GetAllPages")
+func (api *TestApiConfig) GetPages() ([]notion.Page, error) {
+	api.MethodCalled("GetPages")
 
 	if api.pages == nil {
 		return nil, fmt.Errorf("No pages found")
@@ -100,7 +97,7 @@ func TestHandleRequest_Success(t *testing.T) {
 	}
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything) // Set expectations for mock methods
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
@@ -118,7 +115,7 @@ func TestHandleRequest_Error(t *testing.T) {
 	api := &TestApiConfig{}
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
-	api.Mock.On("GetPages", "") // Set expectations for mock methods
+	api.Mock.On("GetPagesSinceTime", mock.Anything) // Set expectations for mock methods
 	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called

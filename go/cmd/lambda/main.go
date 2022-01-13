@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -49,6 +50,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 	return func(ctx context.Context, e events.APIGatewayV2HTTPRequest) (event events.APIGatewayV2HTTPResponse, err error) {
 		var dto *persistence.NotionDTO
 		var apiPages []notion.Page
+		execStartTime := time.Now().Unix()
 		databaseId := api.GetDatabaseId()
 
 		createLogger(ctx, api)
@@ -95,7 +97,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 			dto = &persistence.NotionDTO{
 				DatabaseId: databaseId,
 				Pages:      []notion.Page{},
-				NextCursor: "",
+				LastQuery:  execStartTime,
 			}
 		}
 
@@ -103,7 +105,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		api.GetLogger().Debug().
 			Str("function", "handleRequestForApi").
 			Msg("Getting pages from Notion API")
-		apiPages, err = api.GetPages(dto.NextCursor)
+		apiPages, err = api.GetPagesSinceTime(time.Unix(dto.LastQuery, 0))
 		if err != nil {
 			api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
 			// We could still read from the API, so set apiPages to a stub and keep going
@@ -139,6 +141,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 			Msg("Unioning pages")
 		pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
 		if pagesAdded {
+			dto.LastQuery = execStartTime
 			persistence.PutPages(db, dto, api.GetLogger())
 		}
 		selectedPage := selector.SelectPage(dto.Pages)

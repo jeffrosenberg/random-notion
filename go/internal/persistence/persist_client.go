@@ -21,7 +21,7 @@ var tableName string
 type NotionDTO struct {
 	DatabaseId string        `dynamodbav:"database_id"`
 	Pages      []notion.Page `dynamodbav:"pages"`
-	NextCursor string        `dynamodbav:"next_cursor,omitempty"`
+	LastQuery  int64         `dynamodbav:"last_query,omitempty"`
 }
 
 func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zerolog.Logger) (dto *NotionDTO, err error) {
