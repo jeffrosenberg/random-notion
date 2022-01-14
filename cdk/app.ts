@@ -16,11 +16,11 @@ class Stack extends cdk.Stack {
     });
 
     // Create API and link to DynamoDb
-    const logLevel = 1;  // Debug = 0, Info = 1, Trace = -1
+    const logLevel = 1; // Trace = -1, Debug = 0, Info = 1, Error = 3, Disabled = 7
     const apiHandler = new Function(this, "RandomNotionFunction", logLevel, { 
       entry: "../go/cmd/lambda",
       moduleDir: "../go/go.mod",
-      timeout: Duration.seconds(30),
+      timeout: Duration.seconds(5),
       environment: {
         CACHE_TABLE_NAME: table.tableName,
       },

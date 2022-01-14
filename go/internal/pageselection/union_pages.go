@@ -6,12 +6,11 @@ import (
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
 	"github.com/jeffrosenberg/random-notion/pkg/logging"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
-	"github.com/rs/zerolog"
 )
 
-func UnionPages(dto *persistence.NotionDTO, addl []notion.Page, logger *zerolog.Logger) (pagesAdded bool) {
+func UnionPages(dto *persistence.NotionDTO, addl []notion.Page) (pagesAdded bool) {
 	defer logging.LogFunction(
-		logger, "pageselection.UnionPages", time.Now(), "Unioning pages",
+		"pageselection.UnionPages", time.Now(), "Unioning pages",
 		map[string]interface{}{
 			"pages_cached": len(dto.Pages),
 			"pages_api":    len(addl),

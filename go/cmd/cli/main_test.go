@@ -9,8 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -58,15 +56,6 @@ func (api *TestApiConfig) GetDatabaseId() string {
 	return mockDatabaseId
 }
 
-func (api *TestApiConfig) GetLogger() *zerolog.Logger {
-	api.MethodCalled("GetLogger")
-	return &log.Logger
-}
-
-func (api *TestApiConfig) SetLogger(logger *zerolog.Logger) {
-	return // no action for tests
-}
-
 func (selector *TestSelector) SelectPage(pages []notion.Page) *notion.Page {
 	selector.MethodCalled("SelectPage")
 	return &pages[0]
@@ -98,7 +87,6 @@ func TestHandleRequest_Success(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
 	api.Mock.On("GetPagesSinceTime", mock.Anything) // Set expectations for mock methods
-	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	selector.Mock.On("SelectPage")
 	db.Mock.On("GetItem", mock.Anything)
@@ -116,7 +104,6 @@ func TestHandleRequest_Error(t *testing.T) {
 	selector := &TestSelector{}
 	db := &TestDynamoDb{}
 	api.Mock.On("GetPagesSinceTime", mock.Anything) // Set expectations for mock methods
-	api.Mock.On("GetLogger")
 	api.Mock.On("GetDatabaseId")
 	// selector.Mock.On("SelectPage") // PageSelector methods should NOT be called
 	db.Mock.On("GetItem", mock.Anything)

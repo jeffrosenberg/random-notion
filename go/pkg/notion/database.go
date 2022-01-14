@@ -6,6 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
+
+	"github.com/jeffrosenberg/random-notion/pkg/logging"
 )
 
 type Database struct {
@@ -16,21 +19,24 @@ type Database struct {
 }
 
 func (api *ApiConfig) GetDatabase() (*Database, error) {
-	api.Logger.Info().Msg("Getting database")
+	defer logging.LogFunction(
+		"pages.GetDatabase", time.Now(), "Getting database", map[string]interface{}{},
+	)
+	logger := logging.GetLogger()
 	url, err := url.Parse(fmt.Sprintf("%s/databases/%s", api.Url, api.DatabaseId))
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to parse URL")
+		logger.Err(err).Msg("Unable to parse URL")
 		return nil, fmt.Errorf("Unable to parse URL: %w", err)
 	}
 
 	client := &http.Client{}
-	api.Logger.Trace().
+	logger.Trace().
 		Str("request_verb", "GET").
 		Str("request_url", url.String()).
 		Msg("Prepared Notion API request")
 	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to create request")
+		logger.Err(err).Msg("Unable to create request")
 		return nil, fmt.Errorf("Unable to create request: %w", err)
 	}
 	req.Header.Set("Notion-Version", "2021-08-16")
@@ -38,23 +44,23 @@ func (api *ApiConfig) GetDatabase() (*Database, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to retrieve response")
+		logger.Err(err).Msg("Unable to retrieve response")
 		return nil, fmt.Errorf("Unable to retrieve response: %w", err)
 	}
 
 	if res.StatusCode != http.StatusOK {
 		err = fmt.Errorf("Received invalid status: %s", res.Status)
-		api.Logger.Err(err).Msg("Received invalid status")
+		logger.Err(err).Msg("Received invalid status")
 		return nil, err
 	}
 
 	body, err := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to read response body")
+		logger.Err(err).Msg("Unable to read response body")
 		return nil, fmt.Errorf("Unable to read response body: %w", err)
 	}
-	api.Logger.Trace().RawJSON("db_response_json", body).Msg("Receieved Notion API response")
+	logger.Trace().RawJSON("db_response_json", body).Msg("Receieved Notion API response")
 
 	var db Database
 	json.Unmarshal(body, &db)

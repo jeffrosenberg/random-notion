@@ -15,7 +15,7 @@ export default class Function extends golambda.GoFunction {
     props: golambda.GoFunctionProps
   ) {
     const rev = readGitRevision();
-    const flags = [`-ldflags "-X main.CommitID=${rev} -X main.LogLevel=${logLevel}"`];
+    const flags = [`-ldflags "-X github.com/jeffrosenberg/random-notion/pkg/logging.CommitID=${rev} -X github.com/jeffrosenberg/random-notion/pkg/logging.LogLevel=${logLevel}"`];
     props = {
       tracing: lambda.Tracing.ACTIVE,
       insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_98_0,

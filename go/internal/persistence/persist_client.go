@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/jeffrosenberg/random-notion/pkg/logging"
-	"github.com/rs/zerolog"
 
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 )
@@ -25,9 +24,9 @@ type NotionDTO struct {
 	LastQuery  int64         `dynamodbav:"last_query,omitempty"`
 }
 
-func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zerolog.Logger) (dto *NotionDTO, err error) {
+func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string) (dto *NotionDTO, err error) {
 	defer logging.LogFunction(
-		logger, "persistence.GetPages", time.Now(), "Getting pages from DynamoDb",
+		"persistence.GetPages", time.Now(), "Getting pages from DynamoDb",
 		map[string]interface{}{
 			"table_name":  getTableName(),
 			"database_id": *databaseId,
@@ -44,7 +43,7 @@ func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zero
 
 	output, err := client.GetItem(req)
 	if err != nil {
-		logger.Err(err).Send()
+		logging.GetLogger().Err(err).Send()
 		return
 	}
 
@@ -56,9 +55,9 @@ func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zero
 	return
 }
 
-func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO, logger *zerolog.Logger) (err error) {
+func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO) (err error) {
 	defer logging.LogFunction(
-		logger, "persistence.PutPages", time.Now(), "Putting pages to DynamoDb",
+		"persistence.PutPages", time.Now(), "Putting pages to DynamoDb",
 		map[string]interface{}{
 			"table_name": getTableName(),
 			"pages":      len(dto.Pages),
@@ -68,7 +67,7 @@ func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO, logger *zerolog.
 
 	inputItem, err := dynamodbattribute.MarshalMap(dto)
 	if err != nil {
-		logger.Err(err)
+		logging.GetLogger().Err(err)
 		return fmt.Errorf("Unable to generate DynamoDb input: %w", err)
 	}
 
@@ -80,7 +79,7 @@ func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO, logger *zerolog.
 
 	_, err = client.PutItem(req)
 	if err != nil {
-		logger.Err(err)
+		logging.GetLogger().Err(err)
 		return fmt.Errorf("Error inserting to DynamoDb: %w", err)
 	}
 

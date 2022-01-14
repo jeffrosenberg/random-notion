@@ -4,19 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 
 	selection "github.com/jeffrosenberg/random-notion/internal/pageselection"
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
+	"github.com/jeffrosenberg/random-notion/pkg/logging"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-lambda-go/lambdacontext"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -29,12 +25,6 @@ import (
 const (
 	SecretName   = "random-notion/notion-api"
 	SecretRegion = "us-west-2"
-)
-
-// Inject via CDK configuration
-var (
-	CommitID string
-	LogLevel string = "1" // must be convertable to zerolog.Level - Debug = 0, Info = 1, Trace = -1
 )
 
 type HandlerFn func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
@@ -53,14 +43,14 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		execStartTime := time.Now().Unix()
 		databaseId := api.GetDatabaseId()
 
-		createLogger(ctx, api)
-		api.GetLogger().Trace().
+		logger := logging.GetLoggerWithContext(ctx)
+		logger.Trace().
 			Str("function", "handleRequestForApi").
-			Str("log_level", api.GetLogger().GetLevel().String()).
+			Str("log_level", logger.GetLevel().String()).
 			Msg("Random Notion handler triggered")
 
 		if databaseId == "" {
-			api.GetLogger().Warn().Msg("No DatabaseId provided")
+			logger.Warn().Msg("No DatabaseId provided")
 			return events.APIGatewayV2HTTPResponse{
 				StatusCode: 400,
 				Body:       "No DatabaseId provided",
@@ -71,7 +61,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		defer func() {
 			if r := recover(); r != nil {
 				err := fmt.Errorf("%v", r)
-				api.GetLogger().
+				logger.
 					Err(err).
 					Interface("dto", dto).
 					Interface("api_pages", apiPages).
@@ -87,11 +77,11 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}()
 
 		// 1. Get cached pages from DynamoDb
-		api.GetLogger().Trace().Msg("Getting pages from DynamoDb")
-		dto, err = persistence.GetPages(db, &databaseId, api.GetLogger())
+		logger.Trace().Msg("Getting pages from DynamoDb")
+		dto, err = persistence.GetPages(db, &databaseId)
 		if dto == nil {
 			if err != nil {
-				api.GetLogger().Err(err).Msg("Unable to read cached data from DynamoDb")
+				logger.Err(err).Msg("Unable to read cached data from DynamoDb")
 			}
 			// We could still read from the API, so set dto to a stub and keep going
 			dto = &persistence.NotionDTO{
@@ -102,22 +92,22 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}
 
 		// 2. Get additional pages from the Notion API
-		api.GetLogger().Trace().Msg("Getting pages from Notion API")
+		logger.Trace().Msg("Getting pages from Notion API")
 		apiPages, err = api.GetPagesSinceTime(time.Unix(dto.LastQuery, 0))
 		if err != nil {
-			api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
+			logger.Err(err).Msg("Unable to read pages from Notion API")
 			// We could still read from the API, so set apiPages to a stub and keep going
 			apiPages = []notion.Page{}
 		}
 
-		api.GetLogger().Debug().
+		logger.Debug().
 			Int("pages_cached", len(dto.Pages)).
 			Int("pages_api", len(apiPages)).
 			Msg("Retrieved pages")
 
 		if len(dto.Pages) == 0 && len(apiPages) == 0 {
 			if err != nil {
-				api.GetLogger().Err(err).Send()
+				logger.Err(err).Send()
 				return events.APIGatewayV2HTTPResponse{
 					StatusCode: 400,
 					Body:       err.Error(),
@@ -126,7 +116,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 				// No error, but no pages available: Return 204 No Content
 				// This is a tough scenario to pick a status code for,
 				// but should also be encountered rarely
-				api.GetLogger().Warn().Msg("No records found")
+				logger.Warn().Msg("No records found")
 				return events.APIGatewayV2HTTPResponse{
 					StatusCode: 204,
 				}, nil
@@ -134,11 +124,11 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}
 
 		// 3. Dedup and combine both sources of pages
-		api.GetLogger().Trace().Msg("Unioning pages")
-		pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
+		logger.Trace().Msg("Unioning pages")
+		pagesAdded := selection.UnionPages(dto, apiPages)
 		if pagesAdded {
 			dto.LastQuery = execStartTime
-			persistence.PutPages(db, dto, api.GetLogger())
+			persistence.PutPages(db, dto)
 		}
 		selectedPage := selector.SelectPage(dto.Pages)
 
@@ -148,36 +138,6 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 			Headers:    map[string]string{"Content-Type": "application/json"},
 		}, nil
 	}
-}
-
-func createLogger(ctx context.Context, api notion.PageGetter) {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
-	// Read LogLevel from linker value
-	var level zerolog.Level
-	convertedLevel, err := strconv.ParseInt(LogLevel, 0, 8)
-	if err != nil {
-		level = zerolog.InfoLevel
-		log.Warn().Str("LogLevel", LogLevel).Msg("Unable to convert LogLevel to zerolog.Level")
-	} else {
-		level = zerolog.Level(convertedLevel)
-	}
-
-	logger := log.Logger
-	lc, ok := lambdacontext.FromContext(ctx) // request context
-	if ok && lc != nil {
-		logger = log.With().
-			Str("commit_id", CommitID).
-			Str("request_id", lc.AwsRequestID).
-			Str("function_name", lambdacontext.FunctionName).
-			Logger().
-			Level(zerolog.Level(level))
-		// zerolog usage note: must use Msg() or Send() to trigger logs to actually send
-		logger.Trace().Str("log_level", logger.GetLevel().String()).Msg("Logging initialized")
-	} else {
-		log.Warn().Msg("Lambda context not found")
-	}
-	api.SetLogger(&logger)
 }
 
 // Code snippet via AWS docs:
@@ -194,34 +154,34 @@ func setApiSecrets(api *notion.ApiConfig, sess *session.Session) {
 	// See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
 	result, err := svc.GetSecretValue(input)
 	if err != nil {
+		logger := logging.GetLogger()
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case secretsmanager.ErrCodeDecryptionFailure:
 				// Secrets Manager can't decrypt the protected secret text using the provided KMS key.
-				api.GetLogger().Err(aerr).Msg(secretsmanager.ErrCodeDecryptionFailure)
+				logger.Err(aerr).Msg(secretsmanager.ErrCodeDecryptionFailure)
 
 			case secretsmanager.ErrCodeInternalServiceError:
 				// An error occurred on the server side.
-				api.GetLogger().Err(aerr).Msg(secretsmanager.ErrCodeInternalServiceError)
+				logger.Err(aerr).Msg(secretsmanager.ErrCodeInternalServiceError)
 
 			case secretsmanager.ErrCodeInvalidParameterException:
 				// You provided an invalid value for a parameter.
-				api.GetLogger().Err(aerr).Msg(secretsmanager.ErrCodeInvalidParameterException)
+				logger.Err(aerr).Msg(secretsmanager.ErrCodeInvalidParameterException)
 
 			case secretsmanager.ErrCodeInvalidRequestException:
 				// You provided a parameter value that is not valid for the current state of the resource.
-				api.GetLogger().Err(aerr).Msg(secretsmanager.ErrCodeInvalidRequestException)
+				logger.Err(aerr).Msg(secretsmanager.ErrCodeInvalidRequestException)
 
 			case secretsmanager.ErrCodeResourceNotFoundException:
 				// We can't find the resource that you asked for.
-				api.GetLogger().Err(aerr).Msg(secretsmanager.ErrCodeResourceNotFoundException)
+				logger.Err(aerr).Msg(secretsmanager.ErrCodeResourceNotFoundException)
 			}
 		} else {
 			// Print the error, cast err to awserr.Error to get the Code and
 			// Message from an error.
-			api.GetLogger().Err(aerr).Send()
+			logger.Err(aerr).Send()
 		}
-		return
 	}
 
 	if result.SecretString != nil {
@@ -229,7 +189,6 @@ func setApiSecrets(api *notion.ApiConfig, sess *session.Session) {
 		json.Unmarshal([]byte(*result.SecretString), &secret)
 		api.SecretToken = secret.Token
 		api.DatabaseId = secret.DatabaseId
-		api.GetLogger().Debug().Msg("Retrieved API secrets")
 	} else {
 		panic("Unable to retrieve API secrets")
 	}

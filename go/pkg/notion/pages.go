@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jeffrosenberg/random-notion/pkg/logging"
+	"github.com/rs/zerolog"
 )
 
 type Page struct {
@@ -23,7 +24,6 @@ type PageGetter interface {
 	GetPages() ([]Page, error)
 	GetPagesSinceTime(time.Time) ([]Page, error)
 	GetDatabaseId() string
-	Logger
 }
 
 // ===============================================================
@@ -59,10 +59,12 @@ type pageResponse struct {
 	HasMore bool   `json:"has_more"`
 }
 
+var logger *zerolog.Logger
+
 // Return pages from the Notion API, filtered by time and starting at an optional cursor string
 func (api *ApiConfig) getPages(sinceTime *time.Time, cursor string) ([]Page, error) {
 	defer logging.LogFunction(
-		api.Logger, "pages.getPages", time.Now(), "Getting pages from API",
+		"pages.getPages", time.Now(), "Getting pages from API",
 		map[string]interface{}{
 			"since_time": sinceTime,
 			"cursor":     cursor,
@@ -70,17 +72,18 @@ func (api *ApiConfig) getPages(sinceTime *time.Time, cursor string) ([]Page, err
 	)
 	pages := []Page{}
 	hasMore := true
+	logger = logging.GetLogger()
 
 	for hasMore == true {
 		response, err := api.queryPages(sinceTime, cursor)
 		if err != nil {
-			api.Logger.Err(err).Send()
+			logger.Err(err).Send()
 			return nil, err // More robust error handling would be nice, but skipping as this is a hobby project
 		}
 		pages = append(pages, response.Results...)
 		hasMore = response.HasMore
 		cursor = response.Next
-		api.Logger.Debug().
+		logger.Debug().
 			Int("pages_retrieved", len(response.Results)).
 			Bool("has_more", response.HasMore).
 			Str("cursor", response.Next).
@@ -110,7 +113,6 @@ func (api *ApiConfig) GetDatabaseId() string {
 func (api *ApiConfig) queryPages(sinceTime *time.Time, cursor string) (pageResponse, error) {
 	url, err := url.Parse(fmt.Sprintf("%s/databases/%s/query", api.Url, api.DatabaseId))
 	if err != nil {
-		api.Logger.Err(err).Send() // Must use Msg() or Send() to trigger logs to actually send
 		return pageResponse{}, fmt.Errorf("Unable to parse URL: %w", err)
 	}
 
@@ -128,14 +130,13 @@ func (api *ApiConfig) queryPages(sinceTime *time.Time, cursor string) (pageRespo
 		}
 	}
 	jsonValue, _ := json.Marshal(postBody)
-	api.Logger.Trace().
+	logger.Trace().
 		Str("request_verb", "POST").
 		Str("request_url", url.String()).
 		RawJSON("request_json", jsonValue).
 		Msg("Prepared Notion API request")
 	req, err := http.NewRequest("POST", url.String(), bytes.NewBuffer(jsonValue))
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to create request")
 		return pageResponse{}, fmt.Errorf("Unable to create request: %w", err)
 	}
 	req.Header.Set("Notion-Version", "2021-08-16")
@@ -144,22 +145,19 @@ func (api *ApiConfig) queryPages(sinceTime *time.Time, cursor string) (pageRespo
 
 	res, err := client.Do(req)
 	if err != nil {
-		api.Logger.Err(err).Msg("Unable to retrieve response")
 		return pageResponse{}, fmt.Errorf("Unable to retrieve response: %w", err)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		api.Logger.Err(err).Msg("Received invalid status")
 		return pageResponse{}, fmt.Errorf("Received invalid status: %s", res.Status)
 	}
 
 	body, err := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	if err != nil {
-		api.Logger.Err(err).Msg("Enable to read response body")
 		return pageResponse{}, fmt.Errorf("Enable to read response body: %w", err)
 	}
-	api.Logger.Trace().RawJSON("page_response_json", body).Msg("Receieved Notion API response")
+	logger.Trace().RawJSON("page_response_json", body).Msg("Receieved Notion API response")
 
 	var pageResponse pageResponse
 	json.Unmarshal(body, &pageResponse)
