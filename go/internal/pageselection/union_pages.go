@@ -1,21 +1,22 @@
 package pageselection
 
 import (
+	"time"
+
 	"github.com/jeffrosenberg/random-notion/internal/persistence"
+	"github.com/jeffrosenberg/random-notion/pkg/logging"
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func UnionPages(dto *persistence.NotionDTO, addl []notion.Page, logger *zerolog.Logger) (pagesAdded bool) {
-	if logger == nil {
-		logger = &log.Logger
-	}
-	logger.Info().Str("function", "UnionPages").Msg("Unioning pages")
-	logger.Debug().
-		Int("pages_cached", len(dto.Pages)).
-		Int("pages_api", len(addl)).
-		Msg("Unioning pages")
+	defer logging.LogFunction(
+		logger, "pageselection.UnionPages", time.Now(), "Unioning pages",
+		map[string]interface{}{
+			"pages_cached": len(dto.Pages),
+			"pages_api":    len(addl),
+		},
+	)
 
 	// Short circuit if no addition pages found beyond those cached
 	if len(addl) == 0 {

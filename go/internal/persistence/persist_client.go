@@ -3,13 +3,14 @@ package persistence
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"github.com/jeffrosenberg/random-notion/pkg/logging"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 
 	"github.com/jeffrosenberg/random-notion/pkg/notion"
 )
@@ -25,19 +26,17 @@ type NotionDTO struct {
 }
 
 func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zerolog.Logger) (dto *NotionDTO, err error) {
-	if logger == nil {
-		logger = &log.Logger
-	}
-	logger.Info().Str("function", "GetPages").Msg("Getting pages from DynamoDb")
+	defer logging.LogFunction(
+		logger, "persistence.GetPages", time.Now(), "Getting pages from DynamoDb",
+		map[string]interface{}{
+			"table_name":  getTableName(),
+			"database_id": *databaseId,
+		},
+	)
 
 	dto = &NotionDTO{
 		DatabaseId: *databaseId,
 	}
-
-	logger.Trace().
-		Str("table_name", getTableName()).
-		Str("database_id", *databaseId).
-		Msg("Preparing DynamoDb get item request")
 	req := &dynamodb.GetItemInput{
 		TableName: aws.String(getTableName()),
 		Key:       map[string]*dynamodb.AttributeValue{"database_id": {S: databaseId}},
@@ -58,10 +57,14 @@ func GetPages(client dynamodbiface.DynamoDBAPI, databaseId *string, logger *zero
 }
 
 func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO, logger *zerolog.Logger) (err error) {
-	if logger == nil {
-		logger = &log.Logger
-	}
-	logger.Info().Str("function", "PutPages").Msg("Putting pages to DynamoDb")
+	defer logging.LogFunction(
+		logger, "persistence.PutPages", time.Now(), "Putting pages to DynamoDb",
+		map[string]interface{}{
+			"table_name": getTableName(),
+			"pages":      len(dto.Pages),
+			"notion_dto": *dto,
+		},
+	)
 
 	inputItem, err := dynamodbattribute.MarshalMap(dto)
 	if err != nil {
@@ -69,11 +72,6 @@ func PutPages(client dynamodbiface.DynamoDBAPI, dto *NotionDTO, logger *zerolog.
 		return fmt.Errorf("Unable to generate DynamoDb input: %w", err)
 	}
 
-	logger.Trace().
-		Str("table_name", getTableName()).
-		Int("pages", len(dto.Pages)).
-		Interface("input_item", inputItem).
-		Msg("Preparing DynamoDb put item request")
 	req := &dynamodb.PutItemInput{
 		Item:         inputItem,
 		ReturnValues: aws.String("NONE"),

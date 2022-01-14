@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/jeffrosenberg/random-notion/pkg/logging"
 )
 
 type Page struct {
@@ -59,7 +61,13 @@ type pageResponse struct {
 
 // Return pages from the Notion API, filtered by time and starting at an optional cursor string
 func (api *ApiConfig) getPages(sinceTime *time.Time, cursor string) ([]Page, error) {
-	api.Logger.Info().Str("function", "getPages").Msg("Getting pages from API")
+	defer logging.LogFunction(
+		api.Logger, "pages.getPages", time.Now(), "Getting pages from API",
+		map[string]interface{}{
+			"since_time": sinceTime,
+			"cursor":     cursor,
+		},
+	)
 	pages := []Page{}
 	hasMore := true
 

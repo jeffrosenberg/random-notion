@@ -54,7 +54,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		databaseId := api.GetDatabaseId()
 
 		createLogger(ctx, api)
-		api.GetLogger().Debug().
+		api.GetLogger().Trace().
 			Str("function", "handleRequestForApi").
 			Str("log_level", api.GetLogger().GetLevel().String()).
 			Msg("Random Notion handler triggered")
@@ -87,7 +87,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}()
 
 		// 1. Get cached pages from DynamoDb
-		api.GetLogger().Debug().Msg("Getting pages from DynamoDb")
+		api.GetLogger().Trace().Msg("Getting pages from DynamoDb")
 		dto, err = persistence.GetPages(db, &databaseId, api.GetLogger())
 		if dto == nil {
 			if err != nil {
@@ -102,9 +102,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}
 
 		// 2. Get additional pages from the Notion API
-		api.GetLogger().Debug().
-			Str("function", "handleRequestForApi").
-			Msg("Getting pages from Notion API")
+		api.GetLogger().Trace().Msg("Getting pages from Notion API")
 		apiPages, err = api.GetPagesSinceTime(time.Unix(dto.LastQuery, 0))
 		if err != nil {
 			api.GetLogger().Err(err).Msg("Unable to read pages from Notion API")
@@ -112,7 +110,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 			apiPages = []notion.Page{}
 		}
 
-		api.GetLogger().Info().
+		api.GetLogger().Debug().
 			Int("pages_cached", len(dto.Pages)).
 			Int("pages_api", len(apiPages)).
 			Msg("Retrieved pages")
@@ -136,9 +134,7 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}
 
 		// 3. Dedup and combine both sources of pages
-		api.GetLogger().Debug().
-			Str("function", "handleRequestForApi").
-			Msg("Unioning pages")
+		api.GetLogger().Trace().Msg("Unioning pages")
 		pagesAdded := selection.UnionPages(dto, apiPages, api.GetLogger())
 		if pagesAdded {
 			dto.LastQuery = execStartTime
@@ -146,10 +142,6 @@ func handleRequestForApi(api notion.PageGetter, selector selection.PageSelector,
 		}
 		selectedPage := selector.SelectPage(dto.Pages)
 
-		api.GetLogger().Debug().
-			Str("page_id", selectedPage.Id).
-			Str("page_url", selectedPage.Url).
-			Send()
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: 200,
 			Body:       fmt.Sprintf("{\"id\":\"%s\", \"url\":\"%s\"}", selectedPage.Id, selectedPage.Url),
@@ -181,7 +173,7 @@ func createLogger(ctx context.Context, api notion.PageGetter) {
 			Logger().
 			Level(zerolog.Level(level))
 		// zerolog usage note: must use Msg() or Send() to trigger logs to actually send
-		logger.Info().Str("log_level", logger.GetLevel().String()).Msg("Logging initialized")
+		logger.Trace().Str("log_level", logger.GetLevel().String()).Msg("Logging initialized")
 	} else {
 		log.Warn().Msg("Lambda context not found")
 	}
@@ -237,7 +229,7 @@ func setApiSecrets(api *notion.ApiConfig, sess *session.Session) {
 		json.Unmarshal([]byte(*result.SecretString), &secret)
 		api.SecretToken = secret.Token
 		api.DatabaseId = secret.DatabaseId
-		api.GetLogger().Info().Msg("Retrieved API secrets")
+		api.GetLogger().Debug().Msg("Retrieved API secrets")
 	} else {
 		panic("Unable to retrieve API secrets")
 	}
